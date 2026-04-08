@@ -15,6 +15,19 @@ class QuoteService:
     def list_quotes(self) -> list[dict[str, object]]:
         return self.database.fetch_quotes()
 
+    def search_quotes(self, search_term: str) -> list[dict[str, object]]:
+        return self.database.search_quotes(search_term)
+
+    def duplicate_quote(self, quote_id: int) -> int:
+        payload = self.database.fetch_quote_payload(quote_id)
+        quote_input = QuoteInput(**payload["input"])
+        estimate = QuoteEstimate(
+            total_amount=payload["estimate"]["total_amount"],
+            applied_multipliers=payload["estimate"]["applied_multipliers"],
+            breakdown=payload["estimate"]["breakdown"],
+        )
+        return self.database.insert_quote(quote_input, estimate)
+
 
 class AdminService:
     def __init__(self, database: Database) -> None:

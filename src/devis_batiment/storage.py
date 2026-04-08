@@ -103,6 +103,38 @@ class Database:
             for row in rows
         ]
 
+    def fetch_quote_payload(self, quote_id: int) -> dict[str, object]:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                "SELECT payload_json FROM quotes WHERE id = ?",
+                (quote_id,),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Unknown quote id: {quote_id}")
+        return json.loads(row[0])
+
+    def search_quotes(self, search_term: str) -> list[dict[str, object]]:
+        term = f"%{search_term}%"
+        with sqlite3.connect(self.path) as connection:
+            rows = connection.execute(
+                """
+                SELECT id, created_at, client_name, total_amount
+                FROM quotes
+                WHERE client_name LIKE ?
+                ORDER BY id DESC
+                """,
+                (term,),
+            ).fetchall()
+        return [
+            {
+                "id": row[0],
+                "created_at": row[1],
+                "client_name": row[2],
+                "total_amount": row[3],
+            }
+            for row in rows
+        ]
+
     def upsert_pricing_profile(
         self,
         building_type: str,

@@ -89,3 +89,35 @@ def test_quote_workflow_uses_reference_data_and_persists_quote(tmp_path: Path):
 
     assert saved_id == 1
     assert round(estimate.total_amount, 2) == 108_864_000.00
+
+
+def test_quote_service_can_search_and_duplicate_quotes(tmp_path: Path):
+    database = Database(tmp_path / "history.db")
+    database.initialize()
+    service = QuoteService(database)
+    quote_input = QuoteInput(
+        client_name="M. Rakoto",
+        client_contact="0332222222",
+        building_type="Villa",
+        location="Antananarivo",
+        surface_m2=120,
+        floors=1,
+        structure_type="Beton arme",
+        roof_type="Tuile",
+        room_count=5,
+        finish_level="Standard",
+        complexity="Normal",
+    )
+    estimate = QuoteEstimate(
+        total_amount=108_864_000.0,
+        applied_multipliers={"location": 1.0},
+        breakdown={"Fondations": 21_772_800.0},
+    )
+
+    original_id = service.save_quote(quote_input, estimate)
+    duplicated_id = service.duplicate_quote(original_id)
+    results = service.search_quotes("Rakoto")
+
+    assert duplicated_id == 2
+    assert len(results) == 2
+    assert results[0]["client_name"] == "M. Rakoto"
