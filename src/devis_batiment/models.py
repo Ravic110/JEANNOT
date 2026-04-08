@@ -17,3 +17,10 @@ class QuoteInput:
     finish_level: str
     complexity: str
     notes: str = ""
+
+
+@dataclass(slots=True)
+class QuoteEstimate:
+    total_amount: float
+    applied_multipliers: dict[str, float]
+    breakdown: dict[str, float]
