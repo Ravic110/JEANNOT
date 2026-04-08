@@ -102,3 +102,65 @@ class Database:
             }
             for row in rows
         ]
+
+    def upsert_pricing_profile(
+        self,
+        building_type: str,
+        finish_level: str,
+        base_price_per_m2: float,
+    ) -> None:
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                """
+                INSERT INTO pricing_profiles(building_type, finish_level, base_price_per_m2)
+                VALUES (?, ?, ?)
+                """,
+                (building_type, finish_level, base_price_per_m2),
+            )
+
+    def upsert_adjustment_rule(self, category: str, rule_key: str, multiplier: float) -> None:
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                """
+                INSERT INTO adjustment_rules(category, rule_key, multiplier)
+                VALUES (?, ?, ?)
+                """,
+                (category, rule_key, multiplier),
+            )
+
+    def upsert_breakdown_rule(self, lot_name: str, percentage: float) -> None:
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                """
+                INSERT INTO breakdown_rules(lot_name, percentage)
+                VALUES (?, ?)
+                """,
+                (lot_name, percentage),
+            )
+
+    def fetch_pricing_profiles(self) -> list[dict[str, object]]:
+        with sqlite3.connect(self.path) as connection:
+            rows = connection.execute(
+                "SELECT building_type, finish_level, base_price_per_m2 FROM pricing_profiles ORDER BY id"
+            ).fetchall()
+        return [
+            {"building_type": row[0], "finish_level": row[1], "base_price_per_m2": row[2]}
+            for row in rows
+        ]
+
+    def fetch_adjustment_rules(self) -> list[dict[str, object]]:
+        with sqlite3.connect(self.path) as connection:
+            rows = connection.execute(
+                "SELECT category, rule_key, multiplier FROM adjustment_rules ORDER BY id"
+            ).fetchall()
+        return [
+            {"category": row[0], "rule_key": row[1], "multiplier": row[2]}
+            for row in rows
+        ]
+
+    def fetch_breakdown_rules(self) -> list[dict[str, object]]:
+        with sqlite3.connect(self.path) as connection:
+            rows = connection.execute(
+                "SELECT lot_name, percentage FROM breakdown_rules ORDER BY id"
+            ).fetchall()
+        return [{"lot_name": row[0], "percentage": row[1]} for row in rows]
