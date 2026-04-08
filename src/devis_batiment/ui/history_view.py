@@ -28,6 +28,8 @@ class HistoryView(QWidget):
         self.quote_service = quote_service
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
 
         # Barre de recherche et actions
         filters = QHBoxLayout()
@@ -36,6 +38,7 @@ class HistoryView(QWidget):
         self.search_input.setClearButtonEnabled(True)
         self.refresh_button = QPushButton("Actualiser")
         self.duplicate_button = QPushButton("Dupliquer")
+        self.duplicate_button.setProperty("class", "primary")
         self.duplicate_button.setEnabled(False)
         filters.addWidget(QLabel("Recherche :"))
         filters.addWidget(self.search_input, stretch=1)

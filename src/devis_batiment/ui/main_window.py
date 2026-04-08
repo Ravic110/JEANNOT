@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QMainWindow, QMessageBox, QTabWidget
+from PySide6.QtWidgets import QMainWindow, QMessageBox, QTabWidget, QVBoxLayout, QWidget
 
 from devis_batiment.calculator import MissingReferenceError
 from devis_batiment.models import QuoteInput
@@ -35,10 +35,13 @@ class MainWindow(QMainWindow):
         # Seed des données initiales si la base est vide
         self.admin_service.seed_defaults_if_empty()
 
-        self.setWindowTitle("Jeannot Devis Bâtiment")
-        self.resize(900, 680)
+        self.setWindowTitle("Jeannot — Devis Bâtiment")
+        self.resize(980, 720)
+        self.setMinimumSize(760, 560)
 
         self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(False)
+        self.tabs.setContentsMargins(0, 0, 0, 0)
 
         self.quote_form = QuoteFormWidget()
         self.quote_result = QuoteResultWidget()
@@ -46,13 +49,18 @@ class MainWindow(QMainWindow):
         self.admin_view = AdminView(self.admin_service)
         self.settings_view = SettingsView(self.settings_service)
 
-        self.tabs.addTab(self.quote_form, "Nouveau devis")
-        self.tabs.addTab(self.quote_result, "Résultat")
-        self.tabs.addTab(self.history_view, "Historique")
-        self.tabs.addTab(self.admin_view, "Administration")
-        self.tabs.addTab(self.settings_view, "Paramètres")
+        self.tabs.addTab(self.quote_form, "  Nouveau devis  ")
+        self.tabs.addTab(self.quote_result, "  Résultat  ")
+        self.tabs.addTab(self.history_view, "  Historique  ")
+        self.tabs.addTab(self.admin_view, "  Administration  ")
+        self.tabs.addTab(self.settings_view, "  Paramètres  ")
 
-        self.setCentralWidget(self.tabs)
+        central = QWidget()
+        central_layout = QVBoxLayout(central)
+        central_layout.setContentsMargins(12, 10, 12, 12)
+        central_layout.setSpacing(0)
+        central_layout.addWidget(self.tabs)
+        self.setCentralWidget(central)
 
         # Connexions des signaux
         self.quote_form.quote_requested.connect(self._on_quote_requested)

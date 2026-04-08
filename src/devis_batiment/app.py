@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication
 
 from devis_batiment.config import default_database_path
 from devis_batiment.storage import Database
+from devis_batiment.ui import theme
 from devis_batiment.ui.main_window import MainWindow
 
 
@@ -26,6 +27,7 @@ def create_main_window(database_path: Path | None = None) -> MainWindow:
 
 def run() -> int:
     app = QApplication.instance() or QApplication([])
+    theme.apply(app)
     window = create_main_window()
     window.show()
     return app.exec()

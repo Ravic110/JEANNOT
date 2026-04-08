@@ -30,7 +30,8 @@ class SettingsView(QWidget):
         scroll.setWidgetResizable(True)
         container = QWidget()
         main_layout = QVBoxLayout(container)
-        main_layout.setSpacing(12)
+        main_layout.setSpacing(14)
+        main_layout.setContentsMargins(16, 16, 16, 16)
 
         # --- Groupe : Informations de l'entreprise ---
         company_group = QGroupBox("Informations de l'entreprise")
@@ -83,13 +84,10 @@ class SettingsView(QWidget):
         # --- Boutons ---
         btn_layout = QHBoxLayout()
         self._status_label = QLabel()
-        self._status_label.setStyleSheet("color: green;")
+        self._status_label.setStyleSheet("color: #16A34A; font-weight: 500;")
         self.save_button = QPushButton("Enregistrer les paramètres")
         self.save_button.setMinimumHeight(36)
-        self.save_button.setStyleSheet(
-            "QPushButton { background-color: #2d6be4; color: white; border-radius: 4px; font-weight: bold; }"
-            "QPushButton:hover { background-color: #1a56cc; }"
-        )
+        self.save_button.setProperty("class", "primary")
         btn_layout.addWidget(self._status_label)
         btn_layout.addStretch()
         btn_layout.addWidget(self.save_button)

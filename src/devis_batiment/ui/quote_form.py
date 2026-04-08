@@ -41,7 +41,8 @@ class QuoteFormWidget(QWidget):
         scroll.setWidgetResizable(True)
         container = QWidget()
         main_layout = QVBoxLayout(container)
-        main_layout.setSpacing(12)
+        main_layout.setSpacing(14)
+        main_layout.setContentsMargins(16, 16, 16, 16)
 
         # --- Groupe : Informations client ---
         client_group = QGroupBox("Informations client")
@@ -122,13 +123,10 @@ class QuoteFormWidget(QWidget):
         # --- Bouton ---
         btn_layout = QHBoxLayout()
         self._required_label = QLabel("* Champs obligatoires")
-        self._required_label.setStyleSheet("color: gray; font-size: 11px;")
+        self._required_label.setStyleSheet("color: #94A3B8; font-size: 11px;")
         self.calculate_button = QPushButton("Calculer le devis")
         self.calculate_button.setMinimumHeight(36)
-        self.calculate_button.setStyleSheet(
-            "QPushButton { background-color: #2d6be4; color: white; border-radius: 4px; font-weight: bold; }"
-            "QPushButton:hover { background-color: #1a56cc; }"
-        )
+        self.calculate_button.setProperty("class", "primary")
         self.reset_button = QPushButton("Réinitialiser")
         self.reset_button.setMinimumHeight(36)
         btn_layout.addWidget(self._required_label)

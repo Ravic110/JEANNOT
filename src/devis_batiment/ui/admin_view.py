@@ -36,6 +36,7 @@ class AdminView(QWidget):
         self.admin_service = admin_service
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
         self.tabs = QTabWidget()
 
         # Tab 1 : Profils de prix
@@ -77,7 +78,9 @@ class AdminView(QWidget):
         vbox = QVBoxLayout(widget)
         btn_bar = QHBoxLayout()
         add_btn = QPushButton("+ Ajouter")
+        add_btn.setProperty("class", "primary")
         del_btn = QPushButton("Supprimer")
+        del_btn.setProperty("class", "danger")
         del_btn.setEnabled(False)
         refresh_btn = QPushButton("Actualiser")
         btn_bar.addWidget(add_btn)

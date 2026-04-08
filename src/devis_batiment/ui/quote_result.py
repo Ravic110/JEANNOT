@@ -39,11 +39,12 @@ class QuoteResultWidget(QWidget):
         scroll.setWidgetResizable(True)
         container = QWidget()
         self._main_layout = QVBoxLayout(container)
-        self._main_layout.setSpacing(12)
+        self._main_layout.setSpacing(14)
+        self._main_layout.setContentsMargins(16, 16, 16, 16)
 
         self._placeholder = QLabel("Le résultat du devis apparaîtra ici après le calcul.")
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._placeholder.setStyleSheet("color: gray; font-size: 13px;")
+        self._placeholder.setStyleSheet("color: #94A3B8; font-size: 14px;")
         self._main_layout.addWidget(self._placeholder)
         self._main_layout.addStretch()
 
@@ -54,16 +55,14 @@ class QuoteResultWidget(QWidget):
 
         # --- En-tête : montant total ---
         total_frame = QFrame()
+        total_frame.setObjectName("totalFrame")
         total_frame.setFrameShape(QFrame.Shape.StyledPanel)
-        total_frame.setStyleSheet(
-            "QFrame { background-color: #eaf1fb; border: 1px solid #b3cef5; border-radius: 6px; }"
-        )
         total_layout = QVBoxLayout(total_frame)
         self._quote_id_label = QLabel()
-        self._quote_id_label.setStyleSheet("color: #666; font-size: 11px;")
+        self._quote_id_label.setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;")
         self._total_label = QLabel()
         self._total_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._total_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #1a3a6e;")
+        self._total_label.setStyleSheet("font-size: 24px; font-weight: 700; color: #1E40AF;")
         total_layout.addWidget(self._quote_id_label)
         total_layout.addWidget(self._total_label)
 
