@@ -14,4 +14,5 @@ def test_database_initialize_creates_expected_tables(tmp_path: Path):
         "breakdown_rules",
         "pricing_profiles",
         "quotes",
+        "settings",
     ]

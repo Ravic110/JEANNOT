@@ -21,4 +21,4 @@ def test_create_main_window_uses_default_database_name(tmp_path: Path, monkeypat
     window = create_main_window()
 
     assert window.database.path.name == "devis_batiment.db"
-    assert window.windowTitle() == "Jeannot Devis Batiment"
+    assert window.windowTitle() == "Jeannot Devis Bâtiment"

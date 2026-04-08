@@ -14,7 +14,7 @@ def test_main_window_contains_core_tabs(qtbot):
     qtbot.addWidget(window)
 
     labels = [window.tabs.tabText(index) for index in range(window.tabs.count())]
-    assert labels == ["Nouveau devis", "Resultat", "Historique", "Administration"]
+    assert labels == ["Nouveau devis", "Résultat", "Historique", "Administration", "Paramètres"]
 
 
 def test_admin_and_history_views_expose_main_tables(qtbot):
@@ -34,4 +34,4 @@ def test_create_main_window_bootstraps_database_and_services(tmp_path: Path, qtb
     qtbot.addWidget(window)
 
     assert window.database.path.name == "desktop.db"
-    assert window.tabs.count() == 4
+    assert window.tabs.count() == 5

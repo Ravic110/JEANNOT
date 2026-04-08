@@ -1,9 +1,35 @@
+# Python
 __pycache__/
-.pytest_cache/
-.venv/
-dist/
-build/
 *.pyc
 *.pyo
 *.pyd
+*.pyw
+
+# Tests & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Build & packaging
+dist/
+build/
+*.egg-info/
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# Base de données locale (générée au lancement)
 *.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
