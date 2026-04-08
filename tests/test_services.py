@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from devis_batiment.models import QuoteEstimate, QuoteInput
-from devis_batiment.services import AdminService, QuoteService
+from devis_batiment.services import AdminService, QuoteService, QuoteWorkflow
 from devis_batiment.storage import Database
 
 
@@ -51,3 +51,41 @@ def test_admin_service_saves_and_reads_reference_rules(tmp_path: Path):
     ]
     assert service.list_adjustment_rules()[0]["rule_key"] == "Tuile"
     assert service.list_breakdown_rules()[0]["lot_name"] == "Fondations"
+
+
+def test_quote_workflow_uses_reference_data_and_persists_quote(tmp_path: Path):
+    database = Database(tmp_path / "workflow.db")
+    database.initialize()
+
+    admin = AdminService(database)
+    admin.save_pricing_profile("Villa", "Standard", 800_000)
+    admin.save_adjustment_rule("location", "Antananarivo", 1.0)
+    admin.save_adjustment_rule("structure_type", "Beton arme", 1.05)
+    admin.save_adjustment_rule("roof_type", "Tuile", 1.08)
+    admin.save_adjustment_rule("complexity", "Normal", 1.0)
+    admin.save_adjustment_rule("floors", "1", 1.0)
+    admin.save_breakdown_rule("Fondations", 0.20)
+    admin.save_breakdown_rule("Structure", 0.30)
+    admin.save_breakdown_rule("Toiture", 0.15)
+    admin.save_breakdown_rule("Finitions", 0.25)
+    admin.save_breakdown_rule("Divers", 0.10)
+
+    workflow = QuoteWorkflow(database)
+    saved_id, estimate = workflow.create_quote(
+        QuoteInput(
+            client_name="M. Rakoto",
+            client_contact="0332222222",
+            building_type="Villa",
+            location="Antananarivo",
+            surface_m2=120,
+            floors=1,
+            structure_type="Beton arme",
+            roof_type="Tuile",
+            room_count=5,
+            finish_level="Standard",
+            complexity="Normal",
+        )
+    )
+
+    assert saved_id == 1
+    assert round(estimate.total_amount, 2) == 108_864_000.00

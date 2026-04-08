@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from devis_batiment.calculator import EstimateCalculator
 from devis_batiment.models import QuoteEstimate, QuoteInput
 from devis_batiment.storage import Database
 
@@ -45,3 +46,29 @@ class AdminService:
 
     def list_breakdown_rules(self) -> list[dict[str, object]]:
         return self.database.fetch_breakdown_rules()
+
+
+class QuoteWorkflow:
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def create_quote(self, quote_input: QuoteInput) -> tuple[int, QuoteEstimate]:
+        pricing_profiles = {
+            (row["building_type"], row["finish_level"]): row["base_price_per_m2"]
+            for row in self.database.fetch_pricing_profiles()
+        }
+        adjustment_rules = {
+            (row["category"], row["rule_key"]): row["multiplier"]
+            for row in self.database.fetch_adjustment_rules()
+        }
+        breakdown_rules = {
+            row["lot_name"]: row["percentage"]
+            for row in self.database.fetch_breakdown_rules()
+        }
+        estimate = EstimateCalculator(
+            pricing_profiles=pricing_profiles,
+            adjustment_rules=adjustment_rules,
+            breakdown_rules=breakdown_rules,
+        ).calculate(quote_input)
+        saved_id = self.database.insert_quote(quote_input, estimate)
+        return saved_id, estimate
