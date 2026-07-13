@@ -14,10 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from devis_batiment.services import QuoteService
-
-
-def _fmt_mga(amount: float) -> str:
-    return f"{amount:,.0f} Ar".replace(",", " ")
+from devis_batiment.ui.formatting import format_amount
 
 
 class HistoryView(QWidget):
@@ -26,6 +23,7 @@ class HistoryView(QWidget):
     def __init__(self, quote_service: QuoteService | None = None) -> None:
         super().__init__()
         self.quote_service = quote_service
+        self._currency = "Ar"
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -46,7 +44,7 @@ class HistoryView(QWidget):
         filters.addWidget(self.duplicate_button)
 
         self.quote_table = QTableWidget(0, 4)
-        self.quote_table.setHorizontalHeaderLabels(["ID", "Date", "Client", "Montant (Ar)"])
+        self.quote_table.setHorizontalHeaderLabels(["ID", "Date", "Client", f"Montant ({self._currency})"])
         self.quote_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.quote_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.quote_table.horizontalHeader().setStretchLastSection(True)
@@ -59,9 +57,17 @@ class HistoryView(QWidget):
         self.refresh_button.clicked.connect(self.refresh)
         self.duplicate_button.clicked.connect(self._on_duplicate)
         self.quote_table.itemSelectionChanged.connect(self._on_selection_changed)
+        self.quote_table.cellDoubleClicked.connect(self._on_row_double_clicked)
 
     def set_service(self, quote_service: QuoteService) -> None:
         self.quote_service = quote_service
+        self.refresh()
+
+    def set_currency(self, currency: str) -> None:
+        self._currency = currency or "Ar"
+        self.quote_table.setHorizontalHeaderLabels(
+            ["ID", "Date", "Client", f"Montant ({self._currency})"]
+        )
         self.refresh()
 
     def refresh(self) -> None:
@@ -95,7 +101,7 @@ class HistoryView(QWidget):
             self.quote_table.setItem(i, 1, QTableWidgetItem(date_str))
             self.quote_table.setItem(i, 2, QTableWidgetItem(str(row["client_name"])))
 
-            amt_item = QTableWidgetItem(_fmt_mga(float(row["total_amount"])))
+            amt_item = QTableWidgetItem(format_amount(float(row["total_amount"]), self._currency))
             amt_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.quote_table.setItem(i, 3, amt_item)
 
@@ -103,6 +109,13 @@ class HistoryView(QWidget):
 
     def _on_selection_changed(self) -> None:
         self.duplicate_button.setEnabled(bool(self.quote_table.selectedItems()))
+
+    def _on_row_double_clicked(self, row: int, _column: int) -> None:
+        id_item = self.quote_table.item(row, 0)
+        if id_item is None:
+            return
+        quote_id = int(id_item.data(Qt.ItemDataRole.UserRole))
+        self.open_quote_requested.emit(quote_id)
 
     def _on_duplicate(self) -> None:
         if self.quote_service is None:

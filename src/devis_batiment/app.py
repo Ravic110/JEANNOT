@@ -12,7 +12,7 @@ from devis_batiment.ui.main_window import MainWindow
 
 def build_app_metadata() -> dict[str, str]:
     return {
-        "app_name": "Jeannot Devis Batiment",
+        "app_name": "Jeannot Devis Bâtiment",
         "database_name": "devis_batiment.db",
         "currency": "MGA",
     }

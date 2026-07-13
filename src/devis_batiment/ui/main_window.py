@@ -2,23 +2,39 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QMainWindow, QMessageBox, QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMessageBox,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-from devis_batiment.calculator import MissingReferenceError
+from devis_batiment.services.calcul_btp import MissingMaterialPriceError
 from devis_batiment.models import QuoteInput
-from devis_batiment.services import AdminService, QuoteService, QuoteWorkflow, SettingsService
+from devis_batiment.services import (
+    AdminService,
+    ClientService,
+    ProjectService,
+    QuoteService,
+    QuoteWorkflow,
+    SettingsService,
+)
 from devis_batiment.storage import Database
 from devis_batiment.ui.admin_view import AdminView
+from devis_batiment.ui.clients_view import ClientsView
+from devis_batiment.ui.dashboard_view import DashboardView
 from devis_batiment.ui.history_view import HistoryView
+from devis_batiment.ui.materials_view import MaterialsView
+from devis_batiment.ui.projects_view import ProjectsView
 from devis_batiment.ui.quote_form import QuoteFormWidget
 from devis_batiment.ui.quote_result import QuoteResultWidget
 from devis_batiment.ui.settings_view import SettingsView
-
-_TAB_FORM = 0
-_TAB_RESULT = 1
-_TAB_HISTORY = 2
-_TAB_ADMIN = 3
-_TAB_SETTINGS = 4
 
 
 class MainWindow(QMainWindow):
@@ -31,67 +47,120 @@ class MainWindow(QMainWindow):
         self.quote_service = QuoteService(self.database)
         self.quote_workflow = QuoteWorkflow(self.database)
         self.settings_service = SettingsService(self.database)
+        self.client_service = ClientService(self.database)
+        self.project_service = ProjectService(self.database)
 
-        # Seed des données initiales si la base est vide
         self.admin_service.seed_defaults_if_empty()
 
-        self.setWindowTitle("Jeannot — Devis Bâtiment")
-        self.resize(980, 720)
-        self.setMinimumSize(760, 560)
+        self.setWindowTitle("Jeannot Devis Bâtiment")
+        self.resize(1080, 760)
+        self.setMinimumSize(820, 620)
 
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(False)
-        self.tabs.setContentsMargins(0, 0, 0, 0)
+        self._build_ui()
 
+        self.quote_form.quote_requested.connect(self._on_quote_requested)
+        self.history_view.open_quote_requested.connect(self._on_open_quote_requested)
+        self.pages.currentChanged.connect(self._on_page_changed)
+
+    def _build_ui(self) -> None:
+        sidebar = QListWidget()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(180)
+        sidebar.setSpacing(4)
+        for label in ["Dashboard", "Clients", "Projets", "Devis", "Matériaux", "Tarifs", "Paramètres"]:
+            item = QListWidgetItem(label)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            sidebar.addItem(item)
+
+        self.dashboard_view = DashboardView(self.database)
+        self.clients_view = ClientsView(self.client_service)
+        self.projects_view = ProjectsView(self.project_service)
         self.quote_form = QuoteFormWidget()
         self.quote_result = QuoteResultWidget()
+        self.quote_result.set_settings_service(self.settings_service)
         self.history_view = HistoryView(self.quote_service)
         self.admin_view = AdminView(self.admin_service)
+        self.materials_view = MaterialsView(self.admin_service)
         self.settings_view = SettingsView(self.settings_service)
 
-        self.tabs.addTab(self.quote_form, "  Nouveau devis  ")
-        self.tabs.addTab(self.quote_result, "  Résultat  ")
-        self.tabs.addTab(self.history_view, "  Historique  ")
-        self.tabs.addTab(self.admin_view, "  Administration  ")
-        self.tabs.addTab(self.settings_view, "  Paramètres  ")
+        devis_controls = QStackedWidget()
+        devis_controls.addWidget(self.quote_form)
+        devis_controls.addWidget(self.quote_result)
+        devis_controls.addWidget(self.history_view)
+        self.devis_tabs = devis_controls
 
-        central = QWidget()
-        central_layout = QVBoxLayout(central)
-        central_layout.setContentsMargins(12, 10, 12, 12)
-        central_layout.setSpacing(0)
-        central_layout.addWidget(self.tabs)
-        self.setCentralWidget(central)
+        devis_page = QWidget()
+        devis_layout = QVBoxLayout(devis_page)
+        devis_layout.setContentsMargins(0, 0, 0, 0)
+        devis_layout.addWidget(self.devis_tabs)
 
-        # Connexions des signaux
-        self.quote_form.quote_requested.connect(self._on_quote_requested)
-        self.tabs.currentChanged.connect(self._on_tab_changed)
+        self.pages = QStackedWidget()
+        self.pages.addWidget(self.dashboard_view)
+        self.pages.addWidget(self.clients_view)
+        self.pages.addWidget(self.projects_view)
+        self.pages.addWidget(devis_page)
+        self.pages.addWidget(self.materials_view)
+        self.pages.addWidget(self.admin_view)
+        self.pages.addWidget(self.settings_view)
+
+        content = QWidget()
+        content_layout = QHBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.addWidget(sidebar)
+        content_layout.addWidget(self.pages, stretch=1)
+
+        root = QWidget()
+        root_layout = QVBoxLayout(root)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.addWidget(QLabel("Jeannot Devis Bâtiment"))
+        root_layout.addWidget(content)
+
+        self.setCentralWidget(root)
+        self.sidebar = sidebar
+        sidebar.currentRowChanged.connect(self.pages.setCurrentIndex)
+        sidebar.setCurrentRow(0)
 
     def _on_quote_requested(self, quote_input: QuoteInput) -> None:
         try:
             quote_id, estimate = self.quote_workflow.create_quote(quote_input)
-        except MissingReferenceError as exc:
-            QMessageBox.warning(
-                self,
-                "Données de référence manquantes",
-                str(exc),
-            )
+        except MissingMaterialPriceError as exc:
+            QMessageBox.warning(self, "Prix de matériaux manquants", str(exc))
             return
         except Exception as exc:
-            QMessageBox.critical(
-                self,
-                "Erreur de calcul",
-                f"Une erreur inattendue s'est produite :\n{exc}",
-            )
+            QMessageBox.critical(self, "Erreur de calcul", f"Une erreur inattendue s'est produite :\n{exc}")
             return
 
+        self.quote_result.set_currency(self.settings_service.get("currency") or "Ar")
         self.quote_result.show_result(quote_id, quote_input, estimate)
-        self.tabs.setCurrentIndex(_TAB_RESULT)
+        self.devis_tabs.setCurrentIndex(1)
+        self.pages.setCurrentIndex(3)
         self.history_view.refresh()
 
-    def _on_tab_changed(self, index: int) -> None:
-        if index == _TAB_HISTORY:
-            self.history_view.refresh()
-        elif index == _TAB_ADMIN:
+    def _on_open_quote_requested(self, quote_id: int) -> None:
+        try:
+            quote_input, estimate = self.quote_service.load_quote(quote_id)
+        except Exception as exc:
+            QMessageBox.critical(self, "Erreur", f"Impossible d'ouvrir le devis :\n{exc}")
+            return
+        self.quote_result.set_currency(self.settings_service.get("currency") or "Ar")
+        self.quote_result.show_result(quote_id, quote_input, estimate)
+        self.devis_tabs.setCurrentIndex(1)
+        self.pages.setCurrentIndex(3)
+
+    def _on_page_changed(self, index: int) -> None:
+        currency = self.settings_service.get("currency") or "Ar"
+        if index == 0:
+            self.dashboard_view.set_currency(currency)
+            self.dashboard_view.refresh()
+        elif index == 1:
+            self.clients_view.refresh()
+        elif index == 2:
+            self.projects_view.refresh()
+        elif index == 3:
+            self.history_view.set_currency(currency)
+        elif index == 4:
+            self.materials_view.refresh()
+        elif index == 5:
             self.admin_view.refresh()
-        elif index == _TAB_SETTINGS:
+        elif index == 6:
             self.settings_view.load()

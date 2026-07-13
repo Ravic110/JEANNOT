@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QTableWidget,
@@ -15,6 +18,8 @@ from PySide6.QtWidgets import (
 )
 
 from devis_batiment.models import QuoteEstimate, QuoteInput
+from devis_batiment.ui.formatting import format_amount
+from devis_batiment.utils.pdf import export_quote_pdf
 
 _CATEGORY_LABELS = {
     "location": "Localisation",
@@ -22,16 +27,18 @@ _CATEGORY_LABELS = {
     "roof_type": "Type de toiture",
     "complexity": "Complexité",
     "floors": "Nombre d'étages",
+    "Marge de sécurité": "Marge de sécurité",
 }
-
-
-def _fmt_mga(amount: float) -> str:
-    return f"{amount:,.0f} Ar".replace(",", " ")
 
 
 class QuoteResultWidget(QWidget):
     def __init__(self) -> None:
         super().__init__()
+        self._currency = "Ar"
+        self._settings_service = None
+        self._last_quote_id: int | None = None
+        self._last_input = None
+        self._last_estimate = None
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -66,6 +73,11 @@ class QuoteResultWidget(QWidget):
         total_layout.addWidget(self._quote_id_label)
         total_layout.addWidget(self._total_label)
 
+        self._export_button = QPushButton("Exporter en PDF")
+        self._export_button.setEnabled(False)
+        self._export_button.clicked.connect(self._on_export_pdf)
+        total_layout.addWidget(self._export_button)
+
         # --- Infos client / projet ---
         info_group = QGroupBox("Récapitulatif du projet")
         info_layout = QVBoxLayout(info_group)
@@ -98,10 +110,22 @@ class QuoteResultWidget(QWidget):
         self._breakdown_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         breakdown_layout.addWidget(self._breakdown_table)
 
+        # --- Matériaux et main-d'œuvre ---
+        materials_group = QGroupBox("Matériaux et main-d'œuvre")
+        materials_layout = QVBoxLayout(materials_group)
+        self._materials_table = QTableWidget(0, 5)
+        self._materials_table.setHorizontalHeaderLabels(["Matériau", "Quantité", "Unité", "Prix unitaire", "Total"])
+        self._materials_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._materials_table.setAlternatingRowColors(True)
+        self._materials_table.horizontalHeader().setStretchLastSection(True)
+        self._materials_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        materials_layout.addWidget(self._materials_table)
+
         result_layout.addWidget(total_frame)
         result_layout.addWidget(info_group)
         result_layout.addWidget(coeff_group)
         result_layout.addWidget(breakdown_group)
+        result_layout.addWidget(materials_group)
         result_layout.addStretch()
 
         self._main_layout.addWidget(self._result_container)
@@ -109,18 +133,29 @@ class QuoteResultWidget(QWidget):
         scroll.setWidget(container)
         root_layout.addWidget(scroll)
 
+    def set_currency(self, currency: str) -> None:
+        self._currency = currency or "Ar"
+
+    def set_settings_service(self, settings_service) -> None:
+        self._settings_service = settings_service
+
     def show_result(self, quote_id: int, quote_input: QuoteInput, estimate: QuoteEstimate) -> None:
+        self._last_quote_id = quote_id
+        self._last_input = quote_input
+        self._last_estimate = estimate
+        self._export_button.setEnabled(True)
+
         self._placeholder.setVisible(False)
         self._result_container.setVisible(True)
 
         self._quote_id_label.setText(f"Devis N° {quote_id}")
-        self._total_label.setText(f"Montant total estimé : {_fmt_mga(estimate.total_amount)}")
+        self._total_label.setText(f"Montant total estimé : {format_amount(estimate.total_amount, self._currency)}")
 
         # Récapitulatif
         info_rows = [
             ("Client", quote_input.client_name),
             ("Contact", quote_input.client_contact or "—"),
-            ("Type de bâtiment", quote_input.building_type),
+            ("Type de chantier", quote_input.project_type),
             ("Localisation", quote_input.location),
             ("Surface totale", f"{quote_input.surface_m2:.1f} m²"),
             ("Nombre d'étages", str(quote_input.floors)),
@@ -162,14 +197,10 @@ class QuoteResultWidget(QWidget):
         self._breakdown_table.setRowCount(len(estimate.breakdown))
         for i, (lot_name, amount) in enumerate(estimate.breakdown.items()):
             self._breakdown_table.setItem(i, 0, QTableWidgetItem(lot_name))
-            pct_item = QTableWidgetItem(
-                f"{estimate.applied_multipliers.get('__pct__', amount / estimate.total_amount * 100):.0f} %"
-                if False
-                else f"{amount / estimate.total_amount * 100:.0f} %"
-            )
+            pct_item = QTableWidgetItem(f"{amount / estimate.total_amount * 100:.0f} %")
             pct_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._breakdown_table.setItem(i, 1, pct_item)
-            amt_item = QTableWidgetItem(_fmt_mga(amount))
+            amt_item = QTableWidgetItem(format_amount(amount, self._currency))
             amt_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._breakdown_table.setItem(i, 2, amt_item)
         self._breakdown_table.resizeRowsToContents()
@@ -179,6 +210,50 @@ class QuoteResultWidget(QWidget):
             + 4
         )
 
+        # Matériaux
+        self._materials_table.setRowCount(len(estimate.materials))
+        for i, mat in enumerate(estimate.materials):
+            self._materials_table.setItem(i, 0, QTableWidgetItem(mat.name))
+            qty_item = QTableWidgetItem(f"{mat.quantity:.2f}")
+            qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._materials_table.setItem(i, 1, qty_item)
+            self._materials_table.setItem(i, 2, QTableWidgetItem(mat.unit))
+            up_item = QTableWidgetItem(format_amount(mat.unit_price, self._currency))
+            up_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._materials_table.setItem(i, 3, up_item)
+            total_item = QTableWidgetItem(format_amount(mat.line_total, self._currency))
+            total_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._materials_table.setItem(i, 4, total_item)
+        self._materials_table.resizeRowsToContents()
+        self._materials_table.setFixedHeight(
+            self._materials_table.verticalHeader().length()
+            + self._materials_table.horizontalHeader().height()
+            + 4
+        )
+
     def clear(self) -> None:
         self._result_container.setVisible(False)
         self._placeholder.setVisible(True)
+        self._export_button.setEnabled(False)
+
+    def _on_export_pdf(self) -> None:
+        if self._last_estimate is None or self._last_input is None:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exporter le devis en PDF",
+            f"devis_{self._last_quote_id}.pdf", "PDF (*.pdf)",
+        )
+        if not path:
+            return
+        company_info = (
+            self._settings_service.get_all() if self._settings_service else {}
+        )
+        try:
+            from pathlib import Path
+            export_quote_pdf(
+                Path(path), company_info, self._last_quote_id or 0,
+                self._last_input, self._last_estimate,
+            )
+            QMessageBox.information(self, "Export PDF", f"Devis exporté :\n{path}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Erreur", f"Échec de l'export PDF :\n{exc}")

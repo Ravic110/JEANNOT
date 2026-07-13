@@ -20,9 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from devis_batiment.config import (
-    BUILDING_TYPES,
     COMPLEXITY_LEVELS,
-    FINISH_LEVELS,
     LOCATIONS,
     ROOF_TYPES,
     STRUCTURE_TYPES,
@@ -39,16 +37,7 @@ class AdminView(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         self.tabs = QTabWidget()
 
-        # Tab 1 : Profils de prix
-        self.pricing_table = QTableWidget(0, 3)
-        self.pricing_table.setHorizontalHeaderLabels(["Type de bâtiment", "Finition", "Prix/m² (Ar)"])
-        self.pricing_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.pricing_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.pricing_table.horizontalHeader().setStretchLastSection(True)
-        self.pricing_table.setAlternatingRowColors(True)
-        self.tabs.addTab(self._wrap_with_buttons(self.pricing_table, self._add_pricing, self._del_pricing), "Prix de base")
-
-        # Tab 2 : Coefficients
+        # Tab 1 : Coefficients
         self.adjustment_table = QTableWidget(0, 3)
         self.adjustment_table.setHorizontalHeaderLabels(["Catégorie", "Valeur", "Coefficient"])
         self.adjustment_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -57,7 +46,7 @@ class AdminView(QWidget):
         self.adjustment_table.setAlternatingRowColors(True)
         self.tabs.addTab(self._wrap_with_buttons(self.adjustment_table, self._add_adjustment, self._del_adjustment), "Coefficients")
 
-        # Tab 3 : Répartition
+        # Tab 2 : Répartition
         self.breakdown_table = QTableWidget(0, 2)
         self.breakdown_table.setHorizontalHeaderLabels(["Poste de travaux", "Pourcentage (%)"])
         self.breakdown_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -104,20 +93,8 @@ class AdminView(QWidget):
     def refresh(self) -> None:
         if self.admin_service is None:
             return
-        self._load_pricing()
         self._load_adjustments()
         self._load_breakdown()
-
-    def _load_pricing(self) -> None:
-        rows = self.admin_service.list_pricing_profiles()
-        self.pricing_table.setRowCount(len(rows))
-        for i, row in enumerate(rows):
-            self.pricing_table.setItem(i, 0, QTableWidgetItem(str(row["building_type"])))
-            self.pricing_table.setItem(i, 1, QTableWidgetItem(str(row["finish_level"])))
-            amt = QTableWidgetItem(f"{float(row['base_price_per_m2']):,.0f}".replace(",", " "))
-            amt.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.pricing_table.setItem(i, 2, amt)
-        self.pricing_table.resizeColumnsToContents()
 
     def _load_adjustments(self) -> None:
         rows = self.admin_service.list_adjustment_rules()
@@ -141,21 +118,6 @@ class AdminView(QWidget):
         self.breakdown_table.resizeColumnsToContents()
 
     # --- Ajouts ---
-
-    def _add_pricing(self) -> None:
-        if self.admin_service is None:
-            return
-        dlg = _PricingDialog(self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            try:
-                self.admin_service.save_pricing_profile(
-                    dlg.building_type.currentText(),
-                    dlg.finish_level.currentText(),
-                    dlg.price.value(),
-                )
-                self._load_pricing()
-            except Exception as exc:
-                QMessageBox.critical(self, "Erreur", str(exc))
 
     def _add_adjustment(self) -> None:
         if self.admin_service is None:
@@ -187,23 +149,6 @@ class AdminView(QWidget):
                 QMessageBox.critical(self, "Erreur", str(exc))
 
     # --- Suppressions ---
-
-    def _del_pricing(self) -> None:
-        if self.admin_service is None:
-            return
-        row = self.pricing_table.currentRow()
-        if row < 0:
-            return
-        building_type = self.pricing_table.item(row, 0).text()
-        finish_level = self.pricing_table.item(row, 1).text()
-        reply = QMessageBox.question(
-            self,
-            "Confirmation",
-            f"Supprimer le profil « {building_type} / {finish_level} » ?",
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            self.admin_service.delete_pricing_profile(building_type, finish_level)
-            self._load_pricing()
 
     def _del_adjustment(self) -> None:
         if self.admin_service is None:
@@ -242,38 +187,6 @@ class AdminView(QWidget):
 # ---------------------------------------------------------------------------
 # Dialogues d'ajout
 # ---------------------------------------------------------------------------
-
-class _PricingDialog(QDialog):
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Ajouter un profil de prix")
-        form = QFormLayout(self)
-
-        self.building_type = QComboBox()
-        self.building_type.addItems(BUILDING_TYPES)
-
-        self.finish_level = QComboBox()
-        self.finish_level.addItems(FINISH_LEVELS)
-
-        self.price = QDoubleSpinBox()
-        self.price.setMinimum(1.0)
-        self.price.setMaximum(10_000_000.0)
-        self.price.setDecimals(0)
-        self.price.setSingleStep(50_000)
-        self.price.setValue(1_000_000.0)
-        self.price.setSuffix(" Ar/m²")
-
-        form.addRow("Type de bâtiment", self.building_type)
-        form.addRow("Niveau de finition", self.finish_level)
-        form.addRow("Prix de base", self.price)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        form.addRow(buttons)
-
 
 class _AdjustmentDialog(QDialog):
     _CATEGORIES = [
@@ -329,14 +242,7 @@ class _AdjustmentDialog(QDialog):
         if not self.rule_key.text().strip():
             QMessageBox.warning(self, "Erreur", "La valeur est obligatoire.")
             return
-        # Stocker la clé interne (pas le label)
-        self.category.setCurrentIndex(self.category.currentIndex())
         self.accept()
-
-    # Override currentText pour retourner la clé interne
-    class _CategoryCombo(QComboBox):
-        def currentText(self) -> str:  # type: ignore[override]
-            return self.currentData() or super().currentText()
 
 
 class _BreakdownDialog(QDialog):
