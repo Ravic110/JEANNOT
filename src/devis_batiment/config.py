@@ -74,31 +74,6 @@ DEFAULT_MATERIALS: list[dict[str, object]] = [
 # Ces valeurs sont insérées au premier démarrage si la base est vide.
 # ---------------------------------------------------------------------------
 
-DEFAULT_PRICING_PROFILES: list[dict[str, object]] = [
-    # (type de bâtiment, finition, prix de base en MGA/m²)
-    {"building_type": "Villa", "finish_level": "Économique", "base_price_per_m2": 800_000.0},
-    {"building_type": "Villa", "finish_level": "Standard", "base_price_per_m2": 1_200_000.0},
-    {"building_type": "Villa", "finish_level": "Haut de gamme", "base_price_per_m2": 1_800_000.0},
-    {"building_type": "Immeuble résidentiel", "finish_level": "Économique", "base_price_per_m2": 700_000.0},
-    {"building_type": "Immeuble résidentiel", "finish_level": "Standard", "base_price_per_m2": 1_000_000.0},
-    {"building_type": "Immeuble résidentiel", "finish_level": "Haut de gamme", "base_price_per_m2": 1_500_000.0},
-    {"building_type": "Local commercial", "finish_level": "Économique", "base_price_per_m2": 650_000.0},
-    {"building_type": "Local commercial", "finish_level": "Standard", "base_price_per_m2": 950_000.0},
-    {"building_type": "Local commercial", "finish_level": "Haut de gamme", "base_price_per_m2": 1_400_000.0},
-    {"building_type": "Entrepôt", "finish_level": "Économique", "base_price_per_m2": 450_000.0},
-    {"building_type": "Entrepôt", "finish_level": "Standard", "base_price_per_m2": 650_000.0},
-    {"building_type": "Entrepôt", "finish_level": "Haut de gamme", "base_price_per_m2": 900_000.0},
-    {"building_type": "Bureau", "finish_level": "Économique", "base_price_per_m2": 700_000.0},
-    {"building_type": "Bureau", "finish_level": "Standard", "base_price_per_m2": 1_050_000.0},
-    {"building_type": "Bureau", "finish_level": "Haut de gamme", "base_price_per_m2": 1_600_000.0},
-    {"building_type": "École / Formation", "finish_level": "Économique", "base_price_per_m2": 600_000.0},
-    {"building_type": "École / Formation", "finish_level": "Standard", "base_price_per_m2": 850_000.0},
-    {"building_type": "École / Formation", "finish_level": "Haut de gamme", "base_price_per_m2": 1_200_000.0},
-    {"building_type": "Autre", "finish_level": "Économique", "base_price_per_m2": 700_000.0},
-    {"building_type": "Autre", "finish_level": "Standard", "base_price_per_m2": 1_000_000.0},
-    {"building_type": "Autre", "finish_level": "Haut de gamme", "base_price_per_m2": 1_500_000.0},
-]
-
 DEFAULT_ADJUSTMENT_RULES: list[dict[str, object]] = [
     # Localisation
     {"category": "location", "rule_key": "Antananarivo", "multiplier": 1.10},

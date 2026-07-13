@@ -32,14 +32,6 @@ class Database:
         with self._connect() as connection:
             connection.executescript(
                 """
-                CREATE TABLE IF NOT EXISTS pricing_profiles (
-                    id INTEGER PRIMARY KEY,
-                    building_type TEXT NOT NULL,
-                    finish_level TEXT NOT NULL,
-                    base_price_per_m2 REAL NOT NULL,
-                    UNIQUE(building_type, finish_level)
-                );
-
                 CREATE TABLE IF NOT EXISTS adjustment_rules (
                     id INTEGER PRIMARY KEY,
                     category TEXT NOT NULL,
@@ -107,10 +99,6 @@ class Database:
             )
             # Migration douce : ajout des index uniques si absents (bases existantes)
             try:
-                connection.execute(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_pricing_profiles_key "
-                    "ON pricing_profiles(building_type, finish_level)"
-                )
                 connection.execute(
                     "CREATE UNIQUE INDEX IF NOT EXISTS idx_adjustment_rules_key "
                     "ON adjustment_rules(category, rule_key)"
@@ -194,30 +182,6 @@ class Database:
             for row in rows
         ]
 
-    def upsert_pricing_profile(
-        self,
-        building_type: str,
-        finish_level: str,
-        base_price_per_m2: float,
-    ) -> None:
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO pricing_profiles(building_type, finish_level, base_price_per_m2)
-                VALUES (?, ?, ?)
-                ON CONFLICT(building_type, finish_level)
-                DO UPDATE SET base_price_per_m2 = excluded.base_price_per_m2
-                """,
-                (building_type, finish_level, base_price_per_m2),
-            )
-
-    def delete_pricing_profile(self, building_type: str, finish_level: str) -> None:
-        with self._connect() as connection:
-            connection.execute(
-                "DELETE FROM pricing_profiles WHERE building_type = ? AND finish_level = ?",
-                (building_type, finish_level),
-            )
-
     def upsert_adjustment_rule(self, category: str, rule_key: str, multiplier: float) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -255,16 +219,6 @@ class Database:
                 "DELETE FROM breakdown_rules WHERE lot_name = ?",
                 (lot_name,),
             )
-
-    def fetch_pricing_profiles(self) -> list[dict[str, object]]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT building_type, finish_level, base_price_per_m2 FROM pricing_profiles ORDER BY building_type, finish_level"
-            ).fetchall()
-        return [
-            {"building_type": row[0], "finish_level": row[1], "base_price_per_m2": row[2]}
-            for row in rows
-        ]
 
     def fetch_adjustment_rules(self) -> list[dict[str, object]]:
         with self._connect() as connection:

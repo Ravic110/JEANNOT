@@ -12,7 +12,6 @@ def test_database_initialize_creates_expected_tables(tmp_path: Path):
     assert sorted(table_names) == sorted([
         "adjustment_rules",
         "breakdown_rules",
-        "pricing_profiles",
         "quotes",
         "quote_lines",
         "clients",

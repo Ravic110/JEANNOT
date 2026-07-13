@@ -24,7 +24,7 @@ def test_admin_and_history_views_expose_main_tables(qtbot):
     qtbot.addWidget(admin_view)
     qtbot.addWidget(history_view)
 
-    assert admin_view.pricing_table.columnCount() == 3
+    assert admin_view.adjustment_table.columnCount() == 3
     assert history_view.quote_table.columnCount() == 4
 
 

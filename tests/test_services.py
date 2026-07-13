@@ -52,14 +52,10 @@ def test_admin_service_saves_and_reads_reference_rules(tmp_path: Path):
     database.initialize()
 
     service = AdminService(database)
-    service.save_pricing_profile("Villa", "Standard", 800_000)
     service.save_adjustment_rule("roof_type", "Tuile", 1.08)
     service.save_breakdown_rule("Fondations", 0.20)
     service.save_material("Ciment", "sacs 50kg", 45_000)
 
-    assert service.list_pricing_profiles() == [
-        {"building_type": "Villa", "finish_level": "Standard", "base_price_per_m2": 800_000.0}
-    ]
     assert service.list_adjustment_rules()[0]["rule_key"] == "Tuile"
     assert service.list_breakdown_rules()[0]["lot_name"] == "Fondations"
     assert len(service.list_materials()) >= 1

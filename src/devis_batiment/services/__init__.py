@@ -4,7 +4,6 @@ from devis_batiment.config import (
     DEFAULT_ADJUSTMENT_RULES,
     DEFAULT_BREAKDOWN_RULES,
     DEFAULT_MATERIALS,
-    DEFAULT_PRICING_PROFILES,
 )
 from devis_batiment.models import MaterialLine, QuoteEstimate, QuoteInput
 from devis_batiment.services.calcul_btp import BtpQuoteCalculator
@@ -43,13 +42,6 @@ class AdminService:
 
     def seed_defaults_if_empty(self) -> None:
         """Insère les données de référence par défaut si la base est vide."""
-        if not self.database.fetch_pricing_profiles():
-            for row in DEFAULT_PRICING_PROFILES:
-                self.database.upsert_pricing_profile(
-                    str(row["building_type"]),
-                    str(row["finish_level"]),
-                    float(row["base_price_per_m2"]),
-                )
         if not self.database.fetch_adjustment_rules():
             for row in DEFAULT_ADJUSTMENT_RULES:
                 self.database.upsert_adjustment_rule(
@@ -71,9 +63,6 @@ class AdminService:
                     float(row["unit_price"]),
                 )
 
-    def delete_pricing_profile(self, building_type: str, finish_level: str) -> None:
-        self.database.delete_pricing_profile(building_type, finish_level)
-
     def delete_adjustment_rule(self, category: str, rule_key: str) -> None:
         self.database.delete_adjustment_rule(category, rule_key)
 
@@ -83,18 +72,6 @@ class AdminService:
     def delete_material(self, name: str) -> None:
         self.database.delete_material(name)
 
-    def save_pricing_profile(
-        self,
-        building_type: str,
-        finish_level: str,
-        base_price_per_m2: float,
-    ) -> None:
-        self.database.upsert_pricing_profile(
-            building_type,
-            finish_level,
-            float(base_price_per_m2),
-        )
-
     def save_adjustment_rule(self, category: str, rule_key: str, multiplier: float) -> None:
         self.database.upsert_adjustment_rule(category, rule_key, float(multiplier))
 
@@ -103,9 +80,6 @@ class AdminService:
 
     def save_material(self, name: str, unit: str, unit_price: float) -> None:
         self.database.upsert_material(name, unit, float(unit_price))
-
-    def list_pricing_profiles(self) -> list[dict[str, object]]:
-        return self.database.fetch_pricing_profiles()
 
     def list_adjustment_rules(self) -> list[dict[str, object]]:
         return self.database.fetch_adjustment_rules()
