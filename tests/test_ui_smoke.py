@@ -35,3 +35,11 @@ def test_create_main_window_bootstraps_database_and_services(tmp_path: Path, qtb
 
     assert window.database.path.name == "desktop.db"
     assert window.sidebar.count() == 7
+
+
+def test_format_amount_uses_currency_and_space_separator():
+    from devis_batiment.ui.formatting import format_amount
+
+    assert format_amount(1_234_567) == "1 234 567 Ar"
+    assert format_amount(1000, "MGA") == "1 000 MGA"
+    assert format_amount(0) == "0 Ar"
