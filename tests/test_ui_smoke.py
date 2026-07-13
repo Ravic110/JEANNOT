@@ -8,13 +8,13 @@ from devis_batiment.ui.history_view import HistoryView
 from devis_batiment.ui.main_window import MainWindow
 
 
-def test_main_window_contains_core_tabs(qtbot):
+def test_main_window_contains_sidebar_sections(qtbot):
     app = QApplication.instance() or QApplication([])
     window = MainWindow()
     qtbot.addWidget(window)
 
-    labels = [window.tabs.tabText(index) for index in range(window.tabs.count())]
-    assert labels == ["Nouveau devis", "Résultat", "Historique", "Administration", "Paramètres"]
+    labels = [window.sidebar.item(i).text() for i in range(window.sidebar.count())]
+    assert labels == ["Dashboard", "Clients", "Projets", "Devis", "Matériaux", "Tarifs", "Paramètres"]
 
 
 def test_admin_and_history_views_expose_main_tables(qtbot):
@@ -34,4 +34,4 @@ def test_create_main_window_bootstraps_database_and_services(tmp_path: Path, qtb
     qtbot.addWidget(window)
 
     assert window.database.path.name == "desktop.db"
-    assert window.tabs.count() == 5
+    assert window.sidebar.count() == 7

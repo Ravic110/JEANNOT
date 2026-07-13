@@ -4,22 +4,14 @@ from pathlib import Path
 
 
 def default_database_path() -> Path:
-    return Path.cwd() / "devis_batiment.db"
+    database_dir = Path.cwd() / "database"
+    database_dir.mkdir(exist_ok=True)
+    return database_dir / "db.sqlite"
 
 
 # ---------------------------------------------------------------------------
 # Listes de référence (valeurs proposées dans le formulaire)
 # ---------------------------------------------------------------------------
-
-BUILDING_TYPES = [
-    "Villa",
-    "Immeuble résidentiel",
-    "Local commercial",
-    "Entrepôt",
-    "Bureau",
-    "École / Formation",
-    "Autre",
-]
 
 LOCATIONS = [
     "Antananarivo",
@@ -57,7 +49,25 @@ COMPLEXITY_LEVELS = [
     "Complexe",
 ]
 
+PROJECT_TYPES = [
+    "Maison",
+    "Mur",
+    "Dalle béton",
+    "Route",
+    "Fondation",
+    "Poteau",
+    "Autre",
+]
+
 FLOORS_ADJUSTMENT_KEYS = ["1", "2", "3", "4", "5+"]
+
+DEFAULT_MATERIALS: list[dict[str, object]] = [
+    {"name": "Ciment", "unit": "sacs 50kg", "unit_price": 45_000.0},
+    {"name": "Sable", "unit": "m³", "unit_price": 180_000.0},
+    {"name": "Gravier", "unit": "m³", "unit_price": 190_000.0},
+    {"name": "Fer", "unit": "kg", "unit_price": 4_000.0},
+    {"name": "Main d'œuvre", "unit": "jour", "unit_price": 220_000.0},
+]
 
 # ---------------------------------------------------------------------------
 # Données initiales par défaut (prix et coefficients de référence Madagascar)

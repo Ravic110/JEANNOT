@@ -19,10 +19,10 @@ from PySide6.QtWidgets import (
 )
 
 from devis_batiment.config import (
-    BUILDING_TYPES,
     COMPLEXITY_LEVELS,
     FINISH_LEVELS,
     LOCATIONS,
+    PROJECT_TYPES,
     ROOF_TYPES,
     STRUCTURE_TYPES,
 )
@@ -30,7 +30,7 @@ from devis_batiment.models import QuoteInput
 
 
 class QuoteFormWidget(QWidget):
-    quote_requested = Signal(object)  # émet un QuoteInput validé
+    quote_requested = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -58,18 +58,49 @@ class QuoteFormWidget(QWidget):
         project_group = QGroupBox("Caractéristiques du projet")
         project_form = QFormLayout(project_group)
 
-        self.building_type = QComboBox()
-        self.building_type.addItems(BUILDING_TYPES)
+        self.project_name = QLineEdit()
+        self.project_name.setPlaceholderText("Nom du projet")
+
+        self.project_type = QComboBox()
+        self.project_type.addItems(PROJECT_TYPES)
 
         self.location = QComboBox()
         self.location.addItems(LOCATIONS)
 
         self.surface_m2 = QDoubleSpinBox()
-        self.surface_m2.setMinimum(1.0)
+        self.surface_m2.setMinimum(0.0)
         self.surface_m2.setMaximum(100_000.0)
         self.surface_m2.setDecimals(1)
         self.surface_m2.setSuffix(" m²")
-        self.surface_m2.setValue(100.0)
+        self.surface_m2.setValue(0.0)
+
+        self.length_m = QDoubleSpinBox()
+        self.length_m.setMinimum(0.0)
+        self.length_m.setMaximum(10_000.0)
+        self.length_m.setDecimals(2)
+        self.length_m.setSuffix(" m")
+        self.length_m.setValue(0.0)
+
+        self.width_m = QDoubleSpinBox()
+        self.width_m.setMinimum(0.0)
+        self.width_m.setMaximum(10_000.0)
+        self.width_m.setDecimals(2)
+        self.width_m.setSuffix(" m")
+        self.width_m.setValue(0.0)
+
+        self.height_m = QDoubleSpinBox()
+        self.height_m.setMinimum(0.0)
+        self.height_m.setMaximum(10_000.0)
+        self.height_m.setDecimals(2)
+        self.height_m.setSuffix(" m")
+        self.height_m.setValue(0.0)
+
+        self.thickness_m = QDoubleSpinBox()
+        self.thickness_m.setMinimum(0.0)
+        self.thickness_m.setMaximum(100.0)
+        self.thickness_m.setDecimals(3)
+        self.thickness_m.setSuffix(" m")
+        self.thickness_m.setValue(0.0)
 
         self.floors = QSpinBox()
         self.floors.setMinimum(1)
@@ -83,9 +114,14 @@ class QuoteFormWidget(QWidget):
         self.room_count.setValue(4)
         self.room_count.setSuffix(" pièce(s)")
 
-        project_form.addRow("Type de bâtiment *", self.building_type)
+        project_form.addRow("Nom du projet", self.project_name)
+        project_form.addRow("Type de projet *", self.project_type)
         project_form.addRow("Localisation *", self.location)
-        project_form.addRow("Surface totale *", self.surface_m2)
+        project_form.addRow("Surface", self.surface_m2)
+        project_form.addRow("Longueur", self.length_m)
+        project_form.addRow("Largeur", self.width_m)
+        project_form.addRow("Hauteur", self.height_m)
+        project_form.addRow("Épaisseur", self.thickness_m)
         project_form.addRow("Nombre d'étages *", self.floors)
         project_form.addRow("Nombre de pièces", self.room_count)
 
@@ -101,11 +137,11 @@ class QuoteFormWidget(QWidget):
 
         self.finish_level = QComboBox()
         self.finish_level.addItems(FINISH_LEVELS)
-        self.finish_level.setCurrentIndex(1)  # Standard par défaut
+        self.finish_level.setCurrentIndex(1)
 
         self.complexity = QComboBox()
         self.complexity.addItems(COMPLEXITY_LEVELS)
-        self.complexity.setCurrentIndex(1)  # Moyenne par défaut
+        self.complexity.setCurrentIndex(1)
 
         tech_form.addRow("Type de structure *", self.structure_type)
         tech_form.addRow("Type de toiture *", self.roof_type)
@@ -146,6 +182,7 @@ class QuoteFormWidget(QWidget):
 
         self.calculate_button.clicked.connect(self._on_calculate)
         self.reset_button.clicked.connect(self._on_reset)
+        self.project_type.currentIndexChanged.connect(self._on_project_type_changed)
 
     def _on_calculate(self) -> None:
         errors = self._validate()
@@ -153,7 +190,7 @@ class QuoteFormWidget(QWidget):
             QMessageBox.warning(
                 self,
                 "Champs invalides",
-                "Veuillez corriger les erreurs suivantes :\n\n" + "\n".join(f"• {e}" for e in errors),
+                "Veuillez corriger les erreurs suivantes :\n\n" + "\n".join(f"\u2022 {e}" for e in errors),
             )
             return
         self.quote_requested.emit(self._build_input())
@@ -162,19 +199,53 @@ class QuoteFormWidget(QWidget):
         errors: list[str] = []
         if not self.client_name.text().strip():
             errors.append("Le nom du client est obligatoire.")
-        if self.surface_m2.value() <= 0:
-            errors.append("La surface doit être supérieure à 0 m².")
-        if self.floors.value() < 1:
-            errors.append("Le nombre d'étages doit être au moins 1.")
         return errors
+
+    def _on_project_type_changed(self) -> None:
+        ptype = self.project_type.currentText()
+        if ptype == "Mur":
+            self.length_m.setValue(10.0)
+            self.height_m.setValue(2.5)
+            self.thickness_m.setValue(0.2)
+            self.width_m.setValue(0.0)
+            self.surface_m2.setValue(0.0)
+        elif ptype == "Dalle béton":
+            self.length_m.setValue(5.0)
+            self.width_m.setValue(4.0)
+            self.thickness_m.setValue(0.15)
+            self.surface_m2.setValue(0.0)
+            self.height_m.setValue(0.0)
+        elif ptype == "Route":
+            self.thickness_m.setValue(0.15)
+            self.surface_m2.setValue(500.0)
+            self.length_m.setValue(0.0)
+            self.width_m.setValue(0.0)
+            self.height_m.setValue(0.0)
+        elif ptype == "Maison":
+            self.surface_m2.setValue(100.0)
+            self.length_m.setValue(0.0)
+            self.width_m.setValue(0.0)
+            self.height_m.setValue(0.0)
+            self.thickness_m.setValue(0.0)
+        else:
+            self.surface_m2.setValue(0.0)
+            self.length_m.setValue(0.0)
+            self.width_m.setValue(0.0)
+            self.height_m.setValue(0.0)
+            self.thickness_m.setValue(0.0)
 
     def _build_input(self) -> QuoteInput:
         return QuoteInput(
             client_name=self.client_name.text().strip(),
             client_contact=self.client_contact.text().strip(),
-            building_type=self.building_type.currentText(),
+            project_name=self.project_name.text().strip(),
+            project_type=self.project_type.currentText(),
             location=self.location.currentText(),
             surface_m2=self.surface_m2.value(),
+            length_m=self.length_m.value(),
+            width_m=self.width_m.value(),
+            height_m=self.height_m.value(),
+            thickness_m=self.thickness_m.value(),
             floors=self.floors.value(),
             structure_type=self.structure_type.currentText(),
             roof_type=self.roof_type.currentText(),
@@ -187,9 +258,14 @@ class QuoteFormWidget(QWidget):
     def _on_reset(self) -> None:
         self.client_name.clear()
         self.client_contact.clear()
-        self.building_type.setCurrentIndex(0)
+        self.project_name.clear()
+        self.project_type.setCurrentIndex(0)
         self.location.setCurrentIndex(0)
-        self.surface_m2.setValue(100.0)
+        self.surface_m2.setValue(0.0)
+        self.length_m.setValue(0.0)
+        self.width_m.setValue(0.0)
+        self.height_m.setValue(0.0)
+        self.thickness_m.setValue(0.0)
         self.floors.setValue(1)
         self.room_count.setValue(4)
         self.structure_type.setCurrentIndex(0)
@@ -199,12 +275,16 @@ class QuoteFormWidget(QWidget):
         self.notes.clear()
 
     def populate_from_input(self, quote_input: QuoteInput) -> None:
-        """Pré-remplit le formulaire depuis un QuoteInput existant (duplication)."""
         self.client_name.setText(quote_input.client_name)
         self.client_contact.setText(quote_input.client_contact)
-        _set_combo(self.building_type, quote_input.building_type)
+        self.project_name.setText(quote_input.project_name)
+        _set_combo(self.project_type, quote_input.project_type)
         _set_combo(self.location, quote_input.location)
         self.surface_m2.setValue(quote_input.surface_m2)
+        self.length_m.setValue(quote_input.length_m)
+        self.width_m.setValue(quote_input.width_m)
+        self.height_m.setValue(quote_input.height_m)
+        self.thickness_m.setValue(quote_input.thickness_m)
         self.floors.setValue(quote_input.floors)
         self.room_count.setValue(quote_input.room_count)
         _set_combo(self.structure_type, quote_input.structure_type)

@@ -22,6 +22,7 @@ _CATEGORY_LABELS = {
     "roof_type": "Type de toiture",
     "complexity": "Complexité",
     "floors": "Nombre d'étages",
+    "Marge de sécurité": "Marge de sécurité",
 }
 
 
@@ -98,10 +99,22 @@ class QuoteResultWidget(QWidget):
         self._breakdown_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         breakdown_layout.addWidget(self._breakdown_table)
 
+        # --- Matériaux et main-d'œuvre ---
+        materials_group = QGroupBox("Matériaux et main-d'œuvre")
+        materials_layout = QVBoxLayout(materials_group)
+        self._materials_table = QTableWidget(0, 5)
+        self._materials_table.setHorizontalHeaderLabels(["Matériau", "Quantité", "Unité", "Prix unitaire", "Total"])
+        self._materials_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._materials_table.setAlternatingRowColors(True)
+        self._materials_table.horizontalHeader().setStretchLastSection(True)
+        self._materials_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        materials_layout.addWidget(self._materials_table)
+
         result_layout.addWidget(total_frame)
         result_layout.addWidget(info_group)
         result_layout.addWidget(coeff_group)
         result_layout.addWidget(breakdown_group)
+        result_layout.addWidget(materials_group)
         result_layout.addStretch()
 
         self._main_layout.addWidget(self._result_container)
@@ -120,7 +133,7 @@ class QuoteResultWidget(QWidget):
         info_rows = [
             ("Client", quote_input.client_name),
             ("Contact", quote_input.client_contact or "—"),
-            ("Type de bâtiment", quote_input.building_type),
+            ("Type de chantier", quote_input.project_type),
             ("Localisation", quote_input.location),
             ("Surface totale", f"{quote_input.surface_m2:.1f} m²"),
             ("Nombre d'étages", str(quote_input.floors)),
@@ -162,11 +175,7 @@ class QuoteResultWidget(QWidget):
         self._breakdown_table.setRowCount(len(estimate.breakdown))
         for i, (lot_name, amount) in enumerate(estimate.breakdown.items()):
             self._breakdown_table.setItem(i, 0, QTableWidgetItem(lot_name))
-            pct_item = QTableWidgetItem(
-                f"{estimate.applied_multipliers.get('__pct__', amount / estimate.total_amount * 100):.0f} %"
-                if False
-                else f"{amount / estimate.total_amount * 100:.0f} %"
-            )
+            pct_item = QTableWidgetItem(f"{amount / estimate.total_amount * 100:.0f} %")
             pct_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._breakdown_table.setItem(i, 1, pct_item)
             amt_item = QTableWidgetItem(_fmt_mga(amount))
@@ -176,6 +185,27 @@ class QuoteResultWidget(QWidget):
         self._breakdown_table.setFixedHeight(
             self._breakdown_table.verticalHeader().length()
             + self._breakdown_table.horizontalHeader().height()
+            + 4
+        )
+
+        # Matériaux
+        self._materials_table.setRowCount(len(estimate.materials))
+        for i, mat in enumerate(estimate.materials):
+            self._materials_table.setItem(i, 0, QTableWidgetItem(mat.name))
+            qty_item = QTableWidgetItem(f"{mat.quantity:.2f}")
+            qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._materials_table.setItem(i, 1, qty_item)
+            self._materials_table.setItem(i, 2, QTableWidgetItem(mat.unit))
+            up_item = QTableWidgetItem(_fmt_mga(mat.unit_price))
+            up_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._materials_table.setItem(i, 3, up_item)
+            total_item = QTableWidgetItem(_fmt_mga(mat.line_total))
+            total_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._materials_table.setItem(i, 4, total_item)
+        self._materials_table.resizeRowsToContents()
+        self._materials_table.setFixedHeight(
+            self._materials_table.verticalHeader().length()
+            + self._materials_table.horizontalHeader().height()
             + 4
         )
 

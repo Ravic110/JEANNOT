@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from devis_batiment.calculator import EstimateCalculator
-from devis_batiment.config import DEFAULT_ADJUSTMENT_RULES, DEFAULT_BREAKDOWN_RULES, DEFAULT_PRICING_PROFILES
-from devis_batiment.models import QuoteEstimate, QuoteInput
+from devis_batiment.config import (
+    DEFAULT_ADJUSTMENT_RULES,
+    DEFAULT_BREAKDOWN_RULES,
+    DEFAULT_MATERIALS,
+    DEFAULT_PRICING_PROFILES,
+)
+from devis_batiment.models import MaterialLine, QuoteEstimate, QuoteInput
+from devis_batiment.services.calcul_btp import BtpQuoteCalculator
 from devis_batiment.storage import Database
 
 
@@ -26,6 +31,8 @@ class QuoteService:
             total_amount=payload["estimate"]["total_amount"],
             applied_multipliers=payload["estimate"]["applied_multipliers"],
             breakdown=payload["estimate"]["breakdown"],
+            materials=[MaterialLine(**line) for line in payload["estimate"].get("materials", [])],
+            volume_m3=float(payload["estimate"].get("volume_m3", 0.0)),
         )
         return self.database.insert_quote(quote_input, estimate)
 
@@ -56,6 +63,13 @@ class AdminService:
                     str(row["lot_name"]),
                     float(row["percentage"]),
                 )
+        if not self.database.fetch_materials():
+            for row in DEFAULT_MATERIALS:
+                self.database.upsert_material(
+                    str(row["name"]),
+                    str(row["unit"]),
+                    float(row["unit_price"]),
+                )
 
     def delete_pricing_profile(self, building_type: str, finish_level: str) -> None:
         self.database.delete_pricing_profile(building_type, finish_level)
@@ -65,6 +79,9 @@ class AdminService:
 
     def delete_breakdown_rule(self, lot_name: str) -> None:
         self.database.delete_breakdown_rule(lot_name)
+
+    def delete_material(self, name: str) -> None:
+        self.database.delete_material(name)
 
     def save_pricing_profile(
         self,
@@ -84,6 +101,9 @@ class AdminService:
     def save_breakdown_rule(self, lot_name: str, percentage: float) -> None:
         self.database.upsert_breakdown_rule(lot_name, float(percentage))
 
+    def save_material(self, name: str, unit: str, unit_price: float) -> None:
+        self.database.upsert_material(name, unit, float(unit_price))
+
     def list_pricing_profiles(self) -> list[dict[str, object]]:
         return self.database.fetch_pricing_profiles()
 
@@ -93,22 +113,64 @@ class AdminService:
     def list_breakdown_rules(self) -> list[dict[str, object]]:
         return self.database.fetch_breakdown_rules()
 
+    def list_materials(self) -> list[dict[str, object]]:
+        return self.database.fetch_materials()
+
+
+class ClientService:
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def save_client(self, name: str, contact: str) -> int:
+        return self.database.insert_client(name, contact)
+
+    def list_clients(self) -> list[dict[str, object]]:
+        return self.database.fetch_clients()
+
+    def delete_client(self, client_id: int) -> None:
+        self.database.delete_client(client_id)
+
+
+class ProjectService:
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def save_project(
+        self,
+        client_name: str,
+        client_contact: str,
+        project_name: str,
+        project_type: str,
+        location: str,
+        notes: str,
+    ) -> int:
+        client_id = self.database.insert_client(client_name, client_contact)
+        return self.database.insert_project(client_id, project_name, project_type, location, notes)
+
+    def list_projects(self) -> list[dict[str, object]]:
+        return self.database.fetch_projects()
+
+    def delete_project(self, project_id: int) -> None:
+        self.database.delete_project(project_id)
+
 
 SETTING_KEYS = [
     "company_name",
     "company_address",
     "company_phone",
     "company_email",
+    "company_logo",
     "currency",
     "quote_validity_days",
     "safety_margin_pct",
 ]
 
 SETTING_DEFAULTS: dict[str, str] = {
-    "company_name": "Jeannot Devis Bâtiment",
+    "company_name": "SmartBTP Devis Desktop",
     "company_address": "",
     "company_phone": "",
     "company_email": "",
+    "company_logo": "",
     "currency": "Ar",
     "quote_validity_days": "30",
     "safety_margin_pct": "0",
@@ -140,22 +202,29 @@ class QuoteWorkflow:
         self.database = database
 
     def create_quote(self, quote_input: QuoteInput) -> tuple[int, QuoteEstimate]:
-        pricing_profiles = {
-            (row["building_type"], row["finish_level"]): row["base_price_per_m2"]
-            for row in self.database.fetch_pricing_profiles()
+        material_prices = {
+            row["name"]: {
+                "unit": row["unit"],
+                "unit_price": row["unit_price"],
+            }
+            for row in self.database.fetch_materials()
         }
         adjustment_rules = {
-            (row["category"], row["rule_key"]): row["multiplier"]
+            (str(row["category"]), str(row["rule_key"])): float(row["multiplier"])
             for row in self.database.fetch_adjustment_rules()
         }
         breakdown_rules = {
             row["lot_name"]: row["percentage"]
             for row in self.database.fetch_breakdown_rules()
         }
-        estimate = EstimateCalculator(
-            pricing_profiles=pricing_profiles,
+        safety_margin_pct = float(self.database.get_setting("safety_margin_pct", "0"))
+
+        estimate = BtpQuoteCalculator(
+            material_prices=material_prices,
             adjustment_rules=adjustment_rules,
             breakdown_rules=breakdown_rules,
+            safety_margin_pct=safety_margin_pct,
         ).calculate(quote_input)
+
         saved_id = self.database.insert_quote(quote_input, estimate)
         return saved_id, estimate

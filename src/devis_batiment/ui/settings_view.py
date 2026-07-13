@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -49,10 +50,20 @@ class SettingsView(QWidget):
         self.company_email = QLineEdit()
         self.company_email.setPlaceholderText("contact@entreprise.mg")
 
+        self.company_logo = QLineEdit()
+        self.company_logo.setPlaceholderText("Chemin vers le logo (ex: assets/logo.png)")
+        logo_layout = QHBoxLayout()
+        logo_layout.addWidget(self.company_logo)
+        logo_btn = QPushButton("...")
+        logo_btn.setFixedWidth(36)
+        logo_btn.clicked.connect(self._on_browse_logo)
+        logo_layout.addWidget(logo_btn)
+
         company_form.addRow("Nom de l'entreprise", self.company_name)
         company_form.addRow("Adresse", self.company_address)
         company_form.addRow("Téléphone", self.company_phone)
         company_form.addRow("E-mail", self.company_email)
+        company_form.addRow("Logo", logo_layout)
 
         # --- Groupe : Paramètres de calcul ---
         calc_group = QGroupBox("Paramètres de calcul")
@@ -114,6 +125,7 @@ class SettingsView(QWidget):
         self.company_address.setText(values.get("company_address", ""))
         self.company_phone.setText(values.get("company_phone", ""))
         self.company_email.setText(values.get("company_email", ""))
+        self.company_logo.setText(values.get("company_logo", ""))
         self.currency.setText(values.get("currency", "Ar"))
         try:
             self.safety_margin_pct.setValue(float(values.get("safety_margin_pct", "0")))
@@ -125,6 +137,13 @@ class SettingsView(QWidget):
             self.quote_validity_days.setValue(30)
         self._status_label.setText("")
 
+    def _on_browse_logo(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Sélectionner le logo", "", "Images (*.png *.jpg *.jpeg)"
+        )
+        if path:
+            self.company_logo.setText(path)
+
     def _on_save(self) -> None:
         if self.settings_service is None:
             return
@@ -134,6 +153,7 @@ class SettingsView(QWidget):
                 "company_address": self.company_address.text().strip(),
                 "company_phone": self.company_phone.text().strip(),
                 "company_email": self.company_email.text().strip(),
+                "company_logo": self.company_logo.text().strip(),
                 "currency": self.currency.text().strip() or "Ar",
                 "safety_margin_pct": str(self.safety_margin_pct.value()),
                 "quote_validity_days": str(self.quote_validity_days.value()),

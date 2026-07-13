@@ -59,6 +59,43 @@ class Database:
                     total_amount REAL NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS quote_lines (
+                    id INTEGER PRIMARY KEY,
+                    quote_id INTEGER NOT NULL,
+                    material_name TEXT NOT NULL,
+                    quantity REAL NOT NULL,
+                    unit TEXT NOT NULL,
+                    unit_price REAL NOT NULL,
+                    line_total REAL NOT NULL,
+                    FOREIGN KEY(quote_id) REFERENCES quotes(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS clients (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    contact TEXT,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS projects (
+                    id INTEGER PRIMARY KEY,
+                    client_id INTEGER NOT NULL,
+                    project_name TEXT,
+                    project_type TEXT NOT NULL,
+                    location TEXT,
+                    notes TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(client_id) REFERENCES clients(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS materials (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    unit TEXT NOT NULL,
+                    unit_price REAL NOT NULL,
+                    last_updated TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
@@ -79,6 +116,14 @@ class Database:
                     "CREATE UNIQUE INDEX IF NOT EXISTS idx_breakdown_rules_lot "
                     "ON breakdown_rules(lot_name)"
                 )
+                connection.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_name "
+                    "ON clients(name)"
+                )
+                connection.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_materials_name "
+                    "ON materials(name)"
+                )
             except sqlite3.OperationalError:
                 pass
 
@@ -94,30 +139,6 @@ class Database:
                 """
             ).fetchall()
         return [row[0] for row in rows]
-
-    def insert_quote(self, quote_input: QuoteInput, estimate: QuoteEstimate) -> int:
-        payload = {
-            "input": asdict(quote_input),
-            "estimate": {
-                "total_amount": estimate.total_amount,
-                "applied_multipliers": estimate.applied_multipliers,
-                "breakdown": estimate.breakdown,
-            },
-        }
-        with self._connect() as connection:
-            cursor = connection.execute(
-                """
-                INSERT INTO quotes(created_at, client_name, payload_json, total_amount)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    datetime.now(UTC).isoformat(),
-                    quote_input.client_name,
-                    json.dumps(payload),
-                    estimate.total_amount,
-                ),
-            )
-            return int(cursor.lastrowid)
 
     def fetch_quotes(self) -> list[dict[str, object]]:
         with self._connect() as connection:
@@ -258,6 +279,175 @@ class Database:
                 "SELECT lot_name, percentage FROM breakdown_rules ORDER BY id"
             ).fetchall()
         return [{"lot_name": row[0], "percentage": row[1]} for row in rows]
+
+    def fetch_materials(self) -> list[dict[str, object]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT name, unit, unit_price FROM materials ORDER BY name"
+            ).fetchall()
+        return [
+            {"name": row[0], "unit": row[1], "unit_price": row[2]}
+            for row in rows
+        ]
+
+    def upsert_material(self, name: str, unit: str, unit_price: float) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO materials(name, unit, unit_price, last_updated) VALUES (?, ?, ?, datetime('now')) "
+                "ON CONFLICT(name) DO UPDATE SET unit = excluded.unit, unit_price = excluded.unit_price, last_updated = excluded.last_updated",
+                (name, unit, unit_price),
+            )
+
+    def delete_material(self, name: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM materials WHERE name = ?",
+                (name,),
+            )
+
+    def insert_client(self, name: str, contact: str) -> int:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO clients(name, contact, created_at) VALUES (?, ?, datetime('now')) "
+                "ON CONFLICT(name) DO UPDATE SET contact = excluded.contact",
+                (name, contact),
+            )
+            row = connection.execute(
+                "SELECT id FROM clients WHERE name = ?",
+                (name,),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Impossible de créer le client {name}")
+        return int(row[0])
+
+    def fetch_clients(self) -> list[dict[str, object]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT id, name, contact, created_at FROM clients ORDER BY created_at DESC"
+            ).fetchall()
+        return [
+            {"id": row[0], "name": row[1], "contact": row[2], "created_at": row[3]}
+            for row in rows
+        ]
+
+    def delete_client(self, client_id: int) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM clients WHERE id = ?",
+                (client_id,),
+            )
+
+    def insert_project(
+        self,
+        client_id: int,
+        project_name: str,
+        project_type: str,
+        location: str,
+        notes: str,
+    ) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "INSERT INTO projects(client_id, project_name, project_type, location, notes, created_at) "
+                "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                (client_id, project_name, project_type, location, notes),
+            )
+            return int(cursor.lastrowid)
+
+    def fetch_projects(self) -> list[dict[str, object]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT p.id, c.name, p.project_name, p.project_type, p.location "
+                "FROM projects p "
+                "LEFT JOIN clients c ON c.id = p.client_id "
+                "ORDER BY p.created_at DESC"
+            ).fetchall()
+        return [
+            {
+                "id": row[0],
+                "client_name": row[1],
+                "project_name": row[2],
+                "project_type": row[3],
+                "location": row[4],
+            }
+            for row in rows
+        ]
+
+    def delete_project(self, project_id: int) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM projects WHERE id = ?",
+                (project_id,),
+            )
+
+    def count_quotes(self) -> int:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM quotes"
+            ).fetchone()
+        return int(row[0]) if row is not None else 0
+
+    def count_projects(self) -> int:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM projects"
+            ).fetchone()
+        return int(row[0]) if row is not None else 0
+
+    def sum_quote_amounts(self) -> float:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COALESCE(SUM(total_amount), 0) FROM quotes"
+            ).fetchone()
+        return float(row[0]) if row is not None else 0.0
+
+    def fetch_recent_quotes(self, limit: int = 5) -> list[dict[str, object]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT id, created_at, client_name, total_amount FROM quotes ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                "id": row[0],
+                "created_at": row[1],
+                "client_name": row[2],
+                "total_amount": row[3],
+            }
+            for row in rows
+        ]
+
+    def insert_quote(self, quote_input: QuoteInput, estimate: QuoteEstimate) -> int:
+        payload = {
+            "input": asdict(quote_input),
+            "estimate": {
+                "total_amount": estimate.total_amount,
+                "applied_multipliers": estimate.applied_multipliers,
+                "breakdown": estimate.breakdown,
+                "materials": [asdict(line) for line in estimate.materials],
+                "volume_m3": estimate.volume_m3,
+            },
+        }
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO quotes(created_at, client_name, payload_json, total_amount)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    datetime.now(UTC).isoformat(),
+                    quote_input.client_name,
+                    json.dumps(payload),
+                    estimate.total_amount,
+                ),
+            )
+            quote_id = int(cursor.lastrowid)
+            for line in estimate.materials:
+                connection.execute(
+                    "INSERT INTO quote_lines(quote_id, material_name, quantity, unit, unit_price, line_total) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (quote_id, line.name, line.quantity, line.unit, line.unit_price, line.line_total),
+                )
+            return quote_id
 
     def get_setting(self, key: str, default: str = "") -> str:
         with self._connect() as connection:

@@ -20,13 +20,22 @@ from PySide6.QtWidgets import (
 )
 
 from devis_batiment.config import (
-    BUILDING_TYPES,
     COMPLEXITY_LEVELS,
     FINISH_LEVELS,
     LOCATIONS,
     ROOF_TYPES,
     STRUCTURE_TYPES,
 )
+
+BUILDING_TYPES = [
+    "Villa",
+    "Immeuble résidentiel",
+    "Local commercial",
+    "Entrepôt",
+    "Bureau",
+    "École / Formation",
+    "Autre",
+]
 from devis_batiment.services import AdminService
 
 
