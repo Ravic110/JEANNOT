@@ -59,6 +59,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
 
         self.quote_form.quote_requested.connect(self._on_quote_requested)
+        self.history_view.open_quote_requested.connect(self._on_open_quote_requested)
         self.pages.currentChanged.connect(self._on_page_changed)
 
     def _build_ui(self) -> None:
@@ -133,6 +134,17 @@ class MainWindow(QMainWindow):
         self.devis_tabs.setCurrentIndex(1)
         self.pages.setCurrentIndex(3)
         self.history_view.refresh()
+
+    def _on_open_quote_requested(self, quote_id: int) -> None:
+        try:
+            quote_input, estimate = self.quote_service.load_quote(quote_id)
+        except Exception as exc:
+            QMessageBox.critical(self, "Erreur", f"Impossible d'ouvrir le devis :\n{exc}")
+            return
+        self.quote_result.set_currency(self.settings_service.get("currency") or "Ar")
+        self.quote_result.show_result(quote_id, quote_input, estimate)
+        self.devis_tabs.setCurrentIndex(1)
+        self.pages.setCurrentIndex(3)
 
     def _on_page_changed(self, index: int) -> None:
         currency = self.settings_service.get("currency") or "Ar"

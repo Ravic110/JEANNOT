@@ -43,3 +43,34 @@ def test_format_amount_uses_currency_and_space_separator():
     assert format_amount(1_234_567) == "1 234 567 Ar"
     assert format_amount(1000, "MGA") == "1 000 MGA"
     assert format_amount(0) == "0 Ar"
+
+
+def test_open_quote_from_history_shows_result(qtbot):
+    from pathlib import Path
+    from devis_batiment.models import MaterialLine, QuoteEstimate, QuoteInput
+    from devis_batiment.storage import Database
+    from devis_batiment.ui.main_window import MainWindow
+
+    window = MainWindow(Database(Path(":memory:")))
+    qtbot.addWidget(window)
+
+    quote_input = QuoteInput(
+        client_name="Client Test", client_contact="", project_name="P",
+        project_type="Maison", location="Antananarivo", surface_m2=100,
+        length_m=0.0, width_m=0.0, height_m=0.0, thickness_m=0.0, floors=1,
+        structure_type="Béton armé", roof_type="Tôle", room_count=3,
+        finish_level="Standard", complexity="Simple",
+    )
+    estimate = QuoteEstimate(
+        total_amount=12_000_000.0, applied_multipliers={"Marge de sécurité": 1.0},
+        breakdown={"Matériaux": 12_000_000.0},
+        materials=[MaterialLine("Ciment", "sacs", 10, 45_000, 450_000)],
+        volume_m3=5.0,
+    )
+    saved_id = window.quote_service.save_quote(quote_input, estimate)
+
+    window._on_open_quote_requested(saved_id)
+
+    assert window.pages.currentIndex() == 3
+    assert window.devis_tabs.currentIndex() == 1
+    assert "12 000 000" in window.quote_result._total_label.text()

@@ -57,6 +57,7 @@ class HistoryView(QWidget):
         self.refresh_button.clicked.connect(self.refresh)
         self.duplicate_button.clicked.connect(self._on_duplicate)
         self.quote_table.itemSelectionChanged.connect(self._on_selection_changed)
+        self.quote_table.cellDoubleClicked.connect(self._on_row_double_clicked)
 
     def set_service(self, quote_service: QuoteService) -> None:
         self.quote_service = quote_service
@@ -105,6 +106,13 @@ class HistoryView(QWidget):
 
     def _on_selection_changed(self) -> None:
         self.duplicate_button.setEnabled(bool(self.quote_table.selectedItems()))
+
+    def _on_row_double_clicked(self, row: int, _column: int) -> None:
+        id_item = self.quote_table.item(row, 0)
+        if id_item is None:
+            return
+        quote_id = int(id_item.data(Qt.ItemDataRole.UserRole))
+        self.open_quote_requested.emit(quote_id)
 
     def _on_duplicate(self) -> None:
         if self.quote_service is None:
