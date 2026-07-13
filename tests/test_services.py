@@ -141,3 +141,42 @@ def test_quote_service_can_search_and_duplicate_quotes(tmp_path: Path):
     assert duplicated_id == 2
     assert len(results) == 2
     assert results[0]["client_name"] == "M. Rakoto"
+
+
+def test_quote_service_loads_persisted_quote(tmp_path: Path):
+    database = Database(tmp_path / "load.db")
+    database.initialize()
+    service = QuoteService(database)
+    quote_input = QuoteInput(
+        client_name="Mme Ranaivo",
+        client_contact="0321111111",
+        project_name="Villa",
+        project_type="Maison",
+        location="Toamasina",
+        surface_m2=95,
+        length_m=0.0,
+        width_m=0.0,
+        height_m=0.0,
+        thickness_m=0.0,
+        floors=1,
+        structure_type="Béton armé",
+        roof_type="Tôle",
+        room_count=4,
+        finish_level="Économique",
+        complexity="Simple",
+    )
+    estimate = QuoteEstimate(
+        total_amount=56_000_000.0,
+        applied_multipliers={"Marge de sécurité": 1.0},
+        breakdown={"Matériaux": 56_000_000.0},
+        materials=[MaterialLine("Ciment", "sacs", 100, 45_000, 4_500_000)],
+        volume_m3=11.4,
+    )
+    saved_id = service.save_quote(quote_input, estimate)
+
+    loaded_input, loaded_estimate = service.load_quote(saved_id)
+
+    assert loaded_input == quote_input
+    assert loaded_estimate.total_amount == 56_000_000.0
+    assert loaded_estimate.materials[0].name == "Ciment"
+    assert loaded_estimate.volume_m3 == 11.4

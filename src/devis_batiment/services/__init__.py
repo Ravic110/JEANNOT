@@ -23,16 +23,23 @@ class QuoteService:
     def search_quotes(self, search_term: str) -> list[dict[str, object]]:
         return self.database.search_quotes(search_term)
 
-    def duplicate_quote(self, quote_id: int) -> int:
+    def load_quote(self, quote_id: int) -> tuple[QuoteInput, QuoteEstimate]:
         payload = self.database.fetch_quote_payload(quote_id)
         quote_input = QuoteInput(**payload["input"])
         estimate = QuoteEstimate(
             total_amount=payload["estimate"]["total_amount"],
             applied_multipliers=payload["estimate"]["applied_multipliers"],
             breakdown=payload["estimate"]["breakdown"],
-            materials=[MaterialLine(**line) for line in payload["estimate"].get("materials", [])],
+            materials=[
+                MaterialLine(**line)
+                for line in payload["estimate"].get("materials", [])
+            ],
             volume_m3=float(payload["estimate"].get("volume_m3", 0.0)),
         )
+        return quote_input, estimate
+
+    def duplicate_quote(self, quote_id: int) -> int:
+        quote_input, estimate = self.load_quote(quote_id)
         return self.database.insert_quote(quote_input, estimate)
 
 
