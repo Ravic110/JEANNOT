@@ -147,7 +147,7 @@ SETTING_KEYS = [
 ]
 
 SETTING_DEFAULTS: dict[str, str] = {
-    "company_name": "SmartBTP Devis Desktop",
+    "company_name": "Jeannot Devis Bâtiment",
     "company_address": "",
     "company_phone": "",
     "company_email": "",

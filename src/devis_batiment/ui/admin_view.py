@@ -242,14 +242,7 @@ class _AdjustmentDialog(QDialog):
         if not self.rule_key.text().strip():
             QMessageBox.warning(self, "Erreur", "La valeur est obligatoire.")
             return
-        # Stocker la clé interne (pas le label)
-        self.category.setCurrentIndex(self.category.currentIndex())
         self.accept()
-
-    # Override currentText pour retourner la clé interne
-    class _CategoryCombo(QComboBox):
-        def currentText(self) -> str:  # type: ignore[override]
-            return self.currentData() or super().currentText()
 
 
 class _BreakdownDialog(QDialog):

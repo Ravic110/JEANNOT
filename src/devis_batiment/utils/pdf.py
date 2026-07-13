@@ -62,7 +62,7 @@ def export_quote_pdf(
         elements.append(img)
         elements.append(Spacer(1, 4))
 
-    elements.append(Paragraph(company_info.get("company_name", "SmartBTP Devis Desktop"), title_style))
+    elements.append(Paragraph(company_info.get("company_name", "Jeannot Devis Bâtiment"), title_style))
     company_details = "<br/>".join(
         filter(None, [
             company_info.get("company_address", ""),
@@ -134,7 +134,7 @@ def export_quote_pdf(
     elements.append(Paragraph("Fait à .........................., le .......................", normal_style))
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(
-        f"Document généré par {company_info.get('company_name', 'SmartBTP Devis Desktop')}",
+        f"Document généré par {company_info.get('company_name', 'Jeannot Devis Bâtiment')}",
         small_style,
     ))
 

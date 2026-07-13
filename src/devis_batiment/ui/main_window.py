@@ -52,7 +52,7 @@ class MainWindow(QMainWindow):
 
         self.admin_service.seed_defaults_if_empty()
 
-        self.setWindowTitle("SmartBTP Devis Desktop")
+        self.setWindowTitle("Jeannot Devis Bâtiment")
         self.resize(1080, 760)
         self.setMinimumSize(820, 620)
 
@@ -112,7 +112,7 @@ class MainWindow(QMainWindow):
         root = QWidget()
         root_layout = QVBoxLayout(root)
         root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.addWidget(QLabel("SmartBTP Devis Desktop"))
+        root_layout.addWidget(QLabel("Jeannot Devis Bâtiment"))
         root_layout.addWidget(content)
 
         self.setCentralWidget(root)

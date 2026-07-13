@@ -9,7 +9,7 @@ from devis_batiment.app import create_main_window
 def test_build_app_metadata_returns_expected_defaults():
     metadata = build_app_metadata()
 
-    assert metadata["app_name"] == "Jeannot Devis Batiment"
+    assert metadata["app_name"] == "Jeannot Devis Bâtiment"
     assert metadata["database_name"] == "devis_batiment.db"
     assert metadata["currency"] == "MGA"
 
@@ -19,4 +19,4 @@ def test_create_main_window_uses_database_path():
     window = create_main_window(Path(":memory:"))
 
     assert str(window.database.path) == ":memory:"
-    assert window.windowTitle() == "SmartBTP Devis Desktop"
+    assert window.windowTitle() == "Jeannot Devis Bâtiment"
