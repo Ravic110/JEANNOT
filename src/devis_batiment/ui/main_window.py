@@ -77,6 +77,7 @@ class MainWindow(QMainWindow):
         self.projects_view = ProjectsView(self.project_service)
         self.quote_form = QuoteFormWidget()
         self.quote_result = QuoteResultWidget()
+        self.quote_result.set_settings_service(self.settings_service)
         self.history_view = HistoryView(self.quote_service)
         self.admin_view = AdminView(self.admin_service)
         self.materials_view = MaterialsView(self.admin_service)

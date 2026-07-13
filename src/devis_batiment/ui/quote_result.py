@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QTableWidget,
@@ -16,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from devis_batiment.models import QuoteEstimate, QuoteInput
 from devis_batiment.ui.formatting import format_amount
+from devis_batiment.utils.pdf import export_quote_pdf
 
 _CATEGORY_LABELS = {
     "location": "Localisation",
@@ -31,6 +35,10 @@ class QuoteResultWidget(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self._currency = "Ar"
+        self._settings_service = None
+        self._last_quote_id: int | None = None
+        self._last_input = None
+        self._last_estimate = None
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -64,6 +72,11 @@ class QuoteResultWidget(QWidget):
         self._total_label.setStyleSheet("font-size: 24px; font-weight: 700; color: #1E40AF;")
         total_layout.addWidget(self._quote_id_label)
         total_layout.addWidget(self._total_label)
+
+        self._export_button = QPushButton("Exporter en PDF")
+        self._export_button.setEnabled(False)
+        self._export_button.clicked.connect(self._on_export_pdf)
+        total_layout.addWidget(self._export_button)
 
         # --- Infos client / projet ---
         info_group = QGroupBox("Récapitulatif du projet")
@@ -123,7 +136,15 @@ class QuoteResultWidget(QWidget):
     def set_currency(self, currency: str) -> None:
         self._currency = currency or "Ar"
 
+    def set_settings_service(self, settings_service) -> None:
+        self._settings_service = settings_service
+
     def show_result(self, quote_id: int, quote_input: QuoteInput, estimate: QuoteEstimate) -> None:
+        self._last_quote_id = quote_id
+        self._last_input = quote_input
+        self._last_estimate = estimate
+        self._export_button.setEnabled(True)
+
         self._placeholder.setVisible(False)
         self._result_container.setVisible(True)
 
@@ -213,3 +234,26 @@ class QuoteResultWidget(QWidget):
     def clear(self) -> None:
         self._result_container.setVisible(False)
         self._placeholder.setVisible(True)
+        self._export_button.setEnabled(False)
+
+    def _on_export_pdf(self) -> None:
+        if self._last_estimate is None or self._last_input is None:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exporter le devis en PDF",
+            f"devis_{self._last_quote_id}.pdf", "PDF (*.pdf)",
+        )
+        if not path:
+            return
+        company_info = (
+            self._settings_service.get_all() if self._settings_service else {}
+        )
+        try:
+            from pathlib import Path
+            export_quote_pdf(
+                Path(path), company_info, self._last_quote_id or 0,
+                self._last_input, self._last_estimate,
+            )
+            QMessageBox.information(self, "Export PDF", f"Devis exporté :\n{path}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Erreur", f"Échec de l'export PDF :\n{exc}")
