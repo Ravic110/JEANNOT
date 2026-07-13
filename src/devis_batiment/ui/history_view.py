@@ -14,10 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from devis_batiment.services import QuoteService
-
-
-def _fmt_mga(amount: float) -> str:
-    return f"{amount:,.0f} Ar".replace(",", " ")
+from devis_batiment.ui.formatting import format_amount
 
 
 class HistoryView(QWidget):
@@ -26,6 +23,7 @@ class HistoryView(QWidget):
     def __init__(self, quote_service: QuoteService | None = None) -> None:
         super().__init__()
         self.quote_service = quote_service
+        self._currency = "Ar"
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -64,6 +62,10 @@ class HistoryView(QWidget):
         self.quote_service = quote_service
         self.refresh()
 
+    def set_currency(self, currency: str) -> None:
+        self._currency = currency or "Ar"
+        self.refresh()
+
     def refresh(self) -> None:
         if self.quote_service is None:
             return
@@ -95,7 +97,7 @@ class HistoryView(QWidget):
             self.quote_table.setItem(i, 1, QTableWidgetItem(date_str))
             self.quote_table.setItem(i, 2, QTableWidgetItem(str(row["client_name"])))
 
-            amt_item = QTableWidgetItem(_fmt_mga(float(row["total_amount"])))
+            amt_item = QTableWidgetItem(format_amount(float(row["total_amount"]), self._currency))
             amt_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.quote_table.setItem(i, 3, amt_item)
 

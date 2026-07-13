@@ -128,20 +128,23 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Erreur de calcul", f"Une erreur inattendue s'est produite :\n{exc}")
             return
 
+        self.quote_result.set_currency(self.settings_service.get("currency") or "Ar")
         self.quote_result.show_result(quote_id, quote_input, estimate)
         self.devis_tabs.setCurrentIndex(1)
         self.pages.setCurrentIndex(3)
         self.history_view.refresh()
 
     def _on_page_changed(self, index: int) -> None:
+        currency = self.settings_service.get("currency") or "Ar"
         if index == 0:
+            self.dashboard_view.set_currency(currency)
             self.dashboard_view.refresh()
         elif index == 1:
             self.clients_view.refresh()
         elif index == 2:
             self.projects_view.refresh()
         elif index == 3:
-            self.history_view.refresh()
+            self.history_view.set_currency(currency)
         elif index == 4:
             self.materials_view.refresh()
         elif index == 5:

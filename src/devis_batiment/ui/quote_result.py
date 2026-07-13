@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from devis_batiment.models import QuoteEstimate, QuoteInput
+from devis_batiment.ui.formatting import format_amount
 
 _CATEGORY_LABELS = {
     "location": "Localisation",
@@ -26,13 +27,10 @@ _CATEGORY_LABELS = {
 }
 
 
-def _fmt_mga(amount: float) -> str:
-    return f"{amount:,.0f} Ar".replace(",", " ")
-
-
 class QuoteResultWidget(QWidget):
     def __init__(self) -> None:
         super().__init__()
+        self._currency = "Ar"
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -122,12 +120,15 @@ class QuoteResultWidget(QWidget):
         scroll.setWidget(container)
         root_layout.addWidget(scroll)
 
+    def set_currency(self, currency: str) -> None:
+        self._currency = currency or "Ar"
+
     def show_result(self, quote_id: int, quote_input: QuoteInput, estimate: QuoteEstimate) -> None:
         self._placeholder.setVisible(False)
         self._result_container.setVisible(True)
 
         self._quote_id_label.setText(f"Devis N° {quote_id}")
-        self._total_label.setText(f"Montant total estimé : {_fmt_mga(estimate.total_amount)}")
+        self._total_label.setText(f"Montant total estimé : {format_amount(estimate.total_amount, self._currency)}")
 
         # Récapitulatif
         info_rows = [
@@ -178,7 +179,7 @@ class QuoteResultWidget(QWidget):
             pct_item = QTableWidgetItem(f"{amount / estimate.total_amount * 100:.0f} %")
             pct_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._breakdown_table.setItem(i, 1, pct_item)
-            amt_item = QTableWidgetItem(_fmt_mga(amount))
+            amt_item = QTableWidgetItem(format_amount(amount, self._currency))
             amt_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._breakdown_table.setItem(i, 2, amt_item)
         self._breakdown_table.resizeRowsToContents()
@@ -196,10 +197,10 @@ class QuoteResultWidget(QWidget):
             qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._materials_table.setItem(i, 1, qty_item)
             self._materials_table.setItem(i, 2, QTableWidgetItem(mat.unit))
-            up_item = QTableWidgetItem(_fmt_mga(mat.unit_price))
+            up_item = QTableWidgetItem(format_amount(mat.unit_price, self._currency))
             up_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._materials_table.setItem(i, 3, up_item)
-            total_item = QTableWidgetItem(_fmt_mga(mat.line_total))
+            total_item = QTableWidgetItem(format_amount(mat.line_total, self._currency))
             total_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._materials_table.setItem(i, 4, total_item)
         self._materials_table.resizeRowsToContents()

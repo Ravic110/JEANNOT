@@ -12,16 +12,14 @@ from PySide6.QtWidgets import (
 )
 
 from devis_batiment.storage import Database
-
-
-def _fmt_amount(amount: float) -> str:
-    return f"{amount:,.0f} Ar".replace(",", " ")
+from devis_batiment.ui.formatting import format_amount
 
 
 class DashboardView(QWidget):
     def __init__(self, database: Database | None = None) -> None:
         super().__init__()
         self.database = database
+        self._currency = "Ar"
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -61,6 +59,9 @@ class DashboardView(QWidget):
         )
         return label
 
+    def set_currency(self, currency: str) -> None:
+        self._currency = currency or "Ar"
+
     def refresh(self) -> None:
         if self.database is None:
             return
@@ -69,7 +70,7 @@ class DashboardView(QWidget):
         total_projects = self.database.count_projects()
 
         self.quotes_label.setText(f"<b>Devis enregistrés</b><br>{total_quotes}")
-        self.revenue_label.setText(f"<b>CA estimé</b><br>{_fmt_amount(total_revenue)}")
+        self.revenue_label.setText(f"<b>CA estimé</b><br>{format_amount(total_revenue, self._currency)}")
         self.projects_label.setText(f"<b>Projets actifs</b><br>{total_projects}")
 
         recent = self.database.fetch_recent_quotes(5)
@@ -79,5 +80,5 @@ class DashboardView(QWidget):
             self.recent_table.setItem(i, 1, QTableWidgetItem(str(row["client_name"])))
             date_str = str(row["created_at"])[:19].replace("T", " ")
             self.recent_table.setItem(i, 2, QTableWidgetItem(date_str))
-            self.recent_table.setItem(i, 3, QTableWidgetItem(_fmt_amount(float(row["total_amount"]))))
+            self.recent_table.setItem(i, 3, QTableWidgetItem(format_amount(float(row["total_amount"]), self._currency)))
         self.recent_table.resizeColumnsToContents()
