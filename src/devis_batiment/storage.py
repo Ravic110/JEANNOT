@@ -22,8 +22,11 @@ class Database:
 
     def _connect(self) -> sqlite3.Connection:
         if self._conn is not None:
+            self._conn.execute("PRAGMA foreign_keys = ON")
             return self._conn
-        return sqlite3.connect(self.path)
+        connection = sqlite3.connect(self.path)
+        connection.execute("PRAGMA foreign_keys = ON")
+        return connection
 
     def initialize(self) -> None:
         with self._connect() as connection:
@@ -67,7 +70,7 @@ class Database:
                     unit TEXT NOT NULL,
                     unit_price REAL NOT NULL,
                     line_total REAL NOT NULL,
-                    FOREIGN KEY(quote_id) REFERENCES quotes(id)
+                    FOREIGN KEY(quote_id) REFERENCES quotes(id) ON DELETE CASCADE
                 );
 
                 CREATE TABLE IF NOT EXISTS clients (
@@ -85,7 +88,7 @@ class Database:
                     location TEXT,
                     notes TEXT,
                     created_at TEXT NOT NULL,
-                    FOREIGN KEY(client_id) REFERENCES clients(id)
+                    FOREIGN KEY(client_id) REFERENCES clients(id) ON DELETE CASCADE
                 );
 
                 CREATE TABLE IF NOT EXISTS materials (
