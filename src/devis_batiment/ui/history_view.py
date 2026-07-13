@@ -44,7 +44,7 @@ class HistoryView(QWidget):
         filters.addWidget(self.duplicate_button)
 
         self.quote_table = QTableWidget(0, 4)
-        self.quote_table.setHorizontalHeaderLabels(["ID", "Date", "Client", "Montant (Ar)"])
+        self.quote_table.setHorizontalHeaderLabels(["ID", "Date", "Client", f"Montant ({self._currency})"])
         self.quote_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.quote_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.quote_table.horizontalHeader().setStretchLastSection(True)
@@ -65,6 +65,9 @@ class HistoryView(QWidget):
 
     def set_currency(self, currency: str) -> None:
         self._currency = currency or "Ar"
+        self.quote_table.setHorizontalHeaderLabels(
+            ["ID", "Date", "Client", f"Montant ({self._currency})"]
+        )
         self.refresh()
 
     def refresh(self) -> None:
