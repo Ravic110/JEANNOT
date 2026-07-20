@@ -15,6 +15,19 @@ from devis_batiment.storage import Database
 from devis_batiment.ui.formatting import format_amount
 
 
+def compute_transformation_rate(counts: dict[str, int]) -> float:
+    """Taux de transformation = Accepté / (Envoyé + Accepté + Refusé).
+
+    Les brouillons sont exclus ; renvoie 0.0 si aucun devis n'a quitté l'état
+    brouillon.
+    """
+    accepted = counts.get("Accepté", 0)
+    considered = accepted + counts.get("Envoyé", 0) + counts.get("Refusé", 0)
+    if considered == 0:
+        return 0.0
+    return accepted / considered
+
+
 class DashboardView(QWidget):
     def __init__(self, database: Database | None = None) -> None:
         super().__init__()
@@ -30,10 +43,14 @@ class DashboardView(QWidget):
 
         self.quotes_label = self._build_card("Devis enregistrés")
         self.revenue_label = self._build_card("CA estimé")
+        self.accepted_revenue_label = self._build_card("CA accepté")
+        self.transformation_label = self._build_card("Taux de transformation")
         self.projects_label = self._build_card("Projets actifs")
 
         summary.addWidget(self.quotes_label)
         summary.addWidget(self.revenue_label)
+        summary.addWidget(self.accepted_revenue_label)
+        summary.addWidget(self.transformation_label)
         summary.addWidget(self.projects_label)
 
         recent_group = QGroupBox("Devis récents")
@@ -69,8 +86,18 @@ class DashboardView(QWidget):
         total_revenue = self.database.sum_quote_amounts()
         total_projects = self.database.count_projects()
 
+        counts = self.database.count_quotes_by_status()
+        accepted_revenue = self.database.sum_amount_by_status("Accepté")
+        rate = compute_transformation_rate(counts)
+
         self.quotes_label.setText(f"<b>Devis enregistrés</b><br>{total_quotes}")
         self.revenue_label.setText(f"<b>CA estimé</b><br>{format_amount(total_revenue, self._currency)}")
+        self.accepted_revenue_label.setText(
+            f"<b>CA accepté</b><br>{format_amount(accepted_revenue, self._currency)}"
+        )
+        self.transformation_label.setText(
+            f"<b>Taux de transformation</b><br>{rate * 100:.0f} %"
+        )
         self.projects_label.setText(f"<b>Projets actifs</b><br>{total_projects}")
 
         recent = self.database.fetch_recent_quotes(5)
