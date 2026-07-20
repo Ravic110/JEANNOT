@@ -18,6 +18,7 @@ def test_database_initialize_creates_expected_tables(tmp_path: Path):
         "projects",
         "materials",
         "settings",
+        "quote_templates",
     ])
 
 

@@ -4,6 +4,8 @@ from devis_batiment.config import (
     DEFAULT_ADJUSTMENT_RULES,
     DEFAULT_BREAKDOWN_RULES,
     DEFAULT_MATERIALS,
+    DEFAULT_QUOTE_TEMPLATES,
+    TEMPLATE_FIELDS,
 )
 from devis_batiment.models import MaterialLine, QuoteEstimate, QuoteInput
 from devis_batiment.services.calcul_btp import BtpQuoteCalculator
@@ -69,6 +71,12 @@ class AdminService:
                     str(row["unit"]),
                     float(row["unit_price"]),
                 )
+        if not self.database.fetch_templates():
+            for template in DEFAULT_QUOTE_TEMPLATES:
+                self.database.upsert_template(
+                    str(template["name"]),
+                    dict(template["payload"]),  # type: ignore[arg-type]
+                )
 
     def delete_adjustment_rule(self, category: str, rule_key: str) -> None:
         self.database.delete_adjustment_rule(category, rule_key)
@@ -102,11 +110,40 @@ class ClientService:
     def __init__(self, database: Database) -> None:
         self.database = database
 
-    def save_client(self, name: str, contact: str) -> int:
-        return self.database.insert_client(name, contact)
+    def save_client(
+        self,
+        name: str,
+        contact: str = "",
+        client_type: str = "Particulier",
+        email: str = "",
+        phone: str = "",
+        address: str = "",
+        site_address: str = "",
+        notes: str = "",
+    ) -> int:
+        return self.database.insert_client(
+            name,
+            contact=contact,
+            client_type=client_type,
+            email=email,
+            phone=phone,
+            address=address,
+            site_address=site_address,
+            notes=notes,
+        )
 
-    def list_clients(self) -> list[dict[str, object]]:
-        return self.database.fetch_clients()
+    def list_clients(
+        self,
+        search: str | None = None,
+        client_type: str | None = None,
+    ) -> list[dict[str, object]]:
+        return self.database.fetch_clients(search=search, client_type=client_type)
+
+    def get_client(self, client_id: int) -> dict[str, object]:
+        return self.database.get_client(client_id)
+
+    def list_quotes_for_client(self, client_id: int) -> list[dict[str, object]]:
+        return self.database.list_quotes_for_client(client_id)
 
     def delete_client(self, client_id: int) -> None:
         self.database.delete_client(client_id)
@@ -125,7 +162,7 @@ class ProjectService:
         location: str,
         notes: str,
     ) -> int:
-        client_id = self.database.insert_client(client_name, client_contact)
+        client_id = self.database.ensure_client(client_name, client_contact)
         return self.database.insert_project(client_id, project_name, project_type, location, notes)
 
     def list_projects(self) -> list[dict[str, object]]:
@@ -133,6 +170,21 @@ class ProjectService:
 
     def delete_project(self, project_id: int) -> None:
         self.database.delete_project(project_id)
+
+
+class TemplateService:
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def list_templates(self) -> list[dict[str, object]]:
+        return self.database.fetch_templates()
+
+    def save_template(self, name: str, quote_input: QuoteInput) -> None:
+        payload = {field: getattr(quote_input, field) for field in TEMPLATE_FIELDS}
+        self.database.upsert_template(name, payload)
+
+    def delete_template(self, name: str) -> None:
+        self.database.delete_template(name)
 
 
 SETTING_KEYS = [
@@ -207,5 +259,8 @@ class QuoteWorkflow:
             safety_margin_pct=safety_margin_pct,
         ).calculate(quote_input)
 
-        saved_id = self.database.insert_quote(quote_input, estimate)
+        client_id = self.database.ensure_client(
+            quote_input.client_name, quote_input.client_contact
+        )
+        saved_id = self.database.insert_quote(quote_input, estimate, client_id=client_id)
         return saved_id, estimate

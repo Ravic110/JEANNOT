@@ -6,7 +6,34 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
+from devis_batiment.config import DEFAULT_QUOTE_STATUS
 from devis_batiment.models import QuoteEstimate, QuoteInput
+
+
+def _quote_row(row: tuple) -> dict[str, object]:
+    """Normalise une ligne de la table quotes (status hérité éventuellement NULL)."""
+    return {
+        "id": row[0],
+        "created_at": row[1],
+        "client_name": row[2],
+        "total_amount": row[3],
+        "status": row[4] or DEFAULT_QUOTE_STATUS,
+    }
+
+
+def _client_row(row: tuple) -> dict[str, object]:
+    return {
+        "id": row[0],
+        "name": row[1],
+        "contact": row[2] or "",
+        "created_at": row[3],
+        "client_type": row[4] or "Particulier",
+        "email": row[5] or "",
+        "phone": row[6] or "",
+        "address": row[7] or "",
+        "site_address": row[8] or "",
+        "notes": row[9] or "",
+    }
 
 
 class Database:
@@ -51,7 +78,10 @@ class Database:
                     created_at TEXT NOT NULL,
                     client_name TEXT NOT NULL,
                     payload_json TEXT NOT NULL,
-                    total_amount REAL NOT NULL
+                    total_amount REAL NOT NULL,
+                    client_id INTEGER,
+                    status TEXT NOT NULL DEFAULT 'Brouillon',
+                    FOREIGN KEY(client_id) REFERENCES clients(id) ON DELETE SET NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS quote_lines (
@@ -69,7 +99,13 @@ class Database:
                     id INTEGER PRIMARY KEY,
                     name TEXT NOT NULL UNIQUE,
                     contact TEXT,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    client_type TEXT NOT NULL DEFAULT 'Particulier',
+                    email TEXT,
+                    phone TEXT,
+                    address TEXT,
+                    site_address TEXT,
+                    notes TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS projects (
@@ -95,6 +131,12 @@ class Database:
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS quote_templates (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    payload_json TEXT NOT NULL
+                );
                 """
             )
             # Migration douce : ajout des index uniques si absents (bases existantes)
@@ -117,6 +159,34 @@ class Database:
                 )
             except sqlite3.OperationalError:
                 pass
+            self._ensure_columns(connection)
+
+    def _ensure_columns(self, connection: sqlite3.Connection) -> None:
+        """Ajoute les colonnes manquantes sur les bases existantes (migration douce)."""
+        migrations: dict[str, list[tuple[str, str]]] = {
+            "quotes": [
+                ("client_id", "INTEGER"),
+                ("status", "TEXT NOT NULL DEFAULT 'Brouillon'"),
+            ],
+            "clients": [
+                ("client_type", "TEXT NOT NULL DEFAULT 'Particulier'"),
+                ("email", "TEXT"),
+                ("phone", "TEXT"),
+                ("address", "TEXT"),
+                ("site_address", "TEXT"),
+                ("notes", "TEXT"),
+            ],
+        }
+        for table, columns in migrations.items():
+            existing = {
+                row[1]
+                for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            for name, definition in columns:
+                if name not in existing:
+                    connection.execute(
+                        f"ALTER TABLE {table} ADD COLUMN {name} {definition}"
+                    )
 
     def list_tables(self) -> list[str]:
         with self._connect() as connection:
@@ -135,20 +205,12 @@ class Database:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, created_at, client_name, total_amount
+                SELECT id, created_at, client_name, total_amount, status
                 FROM quotes
                 ORDER BY id DESC
                 """
             ).fetchall()
-        return [
-            {
-                "id": row[0],
-                "created_at": row[1],
-                "client_name": row[2],
-                "total_amount": row[3],
-            }
-            for row in rows
-        ]
+        return [_quote_row(row) for row in rows]
 
     def fetch_quote_payload(self, quote_id: int) -> dict[str, object]:
         with self._connect() as connection:
@@ -165,22 +227,14 @@ class Database:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, created_at, client_name, total_amount
+                SELECT id, created_at, client_name, total_amount, status
                 FROM quotes
                 WHERE client_name LIKE ?
                 ORDER BY id DESC
                 """,
                 (term,),
             ).fetchall()
-        return [
-            {
-                "id": row[0],
-                "created_at": row[1],
-                "client_name": row[2],
-                "total_amount": row[3],
-            }
-            for row in rows
-        ]
+        return [_quote_row(row) for row in rows]
 
     def upsert_adjustment_rule(self, category: str, rule_key: str, multiplier: float) -> None:
         with self._connect() as connection:
@@ -262,11 +316,59 @@ class Database:
                 (name,),
             )
 
-    def insert_client(self, name: str, contact: str) -> int:
+    def insert_client(
+        self,
+        name: str,
+        contact: str = "",
+        client_type: str = "Particulier",
+        email: str = "",
+        phone: str = "",
+        address: str = "",
+        site_address: str = "",
+        notes: str = "",
+    ) -> int:
+        """Upsert complet d'une fiche client (utilisé par le dialogue clients)."""
         with self._connect() as connection:
             connection.execute(
-                "INSERT INTO clients(name, contact, created_at) VALUES (?, ?, datetime('now')) "
-                "ON CONFLICT(name) DO UPDATE SET contact = excluded.contact",
+                """
+                INSERT INTO clients(
+                    name, contact, created_at, client_type,
+                    email, phone, address, site_address, notes
+                )
+                VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    contact = excluded.contact,
+                    client_type = excluded.client_type,
+                    email = excluded.email,
+                    phone = excluded.phone,
+                    address = excluded.address,
+                    site_address = excluded.site_address,
+                    notes = excluded.notes
+                """,
+                (name, contact, client_type, email, phone, address, site_address, notes),
+            )
+            row = connection.execute(
+                "SELECT id FROM clients WHERE name = ?",
+                (name,),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Impossible de créer le client {name}")
+        return int(row[0])
+
+    def ensure_client(self, name: str, contact: str = "") -> int:
+        """Garantit l'existence d'un client sans écraser ses champs enrichis.
+
+        Utilisé lors de la création d'un devis : on ne dispose que du nom et du
+        contact, il ne faut donc pas effacer le type/adresse/notes déjà saisis.
+        """
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO clients(name, contact, created_at)
+                VALUES (?, ?, datetime('now'))
+                ON CONFLICT(name) DO UPDATE SET
+                    contact = COALESCE(NULLIF(clients.contact, ''), excluded.contact)
+                """,
                 (name, contact),
             )
             row = connection.execute(
@@ -277,15 +379,49 @@ class Database:
             raise LookupError(f"Impossible de créer le client {name}")
         return int(row[0])
 
-    def fetch_clients(self) -> list[dict[str, object]]:
+    def get_client(self, client_id: int) -> dict[str, object]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT id, name, contact, created_at, client_type, email, phone, "
+                "address, site_address, notes FROM clients WHERE id = ?",
+                (client_id,),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Client inconnu : {client_id}")
+        return _client_row(row)
+
+    def fetch_clients(
+        self,
+        search: str | None = None,
+        client_type: str | None = None,
+    ) -> list[dict[str, object]]:
+        query = (
+            "SELECT id, name, contact, created_at, client_type, email, phone, "
+            "address, site_address, notes FROM clients"
+        )
+        conditions: list[str] = []
+        params: list[object] = []
+        if search:
+            conditions.append("name LIKE ?")
+            params.append(f"%{search}%")
+        if client_type:
+            conditions.append("client_type = ?")
+            params.append(client_type)
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY created_at DESC"
+        with self._connect() as connection:
+            rows = connection.execute(query, params).fetchall()
+        return [_client_row(row) for row in rows]
+
+    def list_quotes_for_client(self, client_id: int) -> list[dict[str, object]]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT id, name, contact, created_at FROM clients ORDER BY created_at DESC"
+                "SELECT id, created_at, client_name, total_amount, status "
+                "FROM quotes WHERE client_id = ? ORDER BY id DESC",
+                (client_id,),
             ).fetchall()
-        return [
-            {"id": row[0], "name": row[1], "contact": row[2], "created_at": row[3]}
-            for row in rows
-        ]
+        return [_quote_row(row) for row in rows]
 
     def delete_client(self, client_id: int) -> None:
         with self._connect() as connection:
@@ -360,20 +496,40 @@ class Database:
     def fetch_recent_quotes(self, limit: int = 5) -> list[dict[str, object]]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT id, created_at, client_name, total_amount FROM quotes ORDER BY created_at DESC LIMIT ?",
+                "SELECT id, created_at, client_name, total_amount, status "
+                "FROM quotes ORDER BY created_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
-        return [
-            {
-                "id": row[0],
-                "created_at": row[1],
-                "client_name": row[2],
-                "total_amount": row[3],
-            }
-            for row in rows
-        ]
+        return [_quote_row(row) for row in rows]
 
-    def insert_quote(self, quote_input: QuoteInput, estimate: QuoteEstimate) -> int:
+    def update_quote_status(self, quote_id: int, status: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE quotes SET status = ? WHERE id = ?",
+                (status, quote_id),
+            )
+
+    def count_quotes_by_status(self) -> dict[str, int]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT status, COUNT(*) FROM quotes GROUP BY status"
+            ).fetchall()
+        return {row[0]: int(row[1]) for row in rows}
+
+    def sum_amount_by_status(self, status: str) -> float:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COALESCE(SUM(total_amount), 0) FROM quotes WHERE status = ?",
+                (status,),
+            ).fetchone()
+        return float(row[0]) if row is not None else 0.0
+
+    def insert_quote(
+        self,
+        quote_input: QuoteInput,
+        estimate: QuoteEstimate,
+        client_id: int | None = None,
+    ) -> int:
         payload = {
             "input": asdict(quote_input),
             "estimate": {
@@ -387,14 +543,19 @@ class Database:
         with self._connect() as connection:
             cursor = connection.execute(
                 """
-                INSERT INTO quotes(created_at, client_name, payload_json, total_amount)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO quotes(
+                    created_at, client_name, payload_json, total_amount,
+                    client_id, status
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     datetime.now(UTC).isoformat(),
                     quote_input.client_name,
                     json.dumps(payload),
                     estimate.total_amount,
+                    client_id,
+                    DEFAULT_QUOTE_STATUS,
                 ),
             )
             quote_id = int(cursor.lastrowid)
@@ -405,6 +566,28 @@ class Database:
                     (quote_id, line.name, line.quantity, line.unit, line.unit_price, line.line_total),
                 )
             return quote_id
+
+    def fetch_templates(self) -> list[dict[str, object]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT name, payload_json FROM quote_templates ORDER BY name"
+            ).fetchall()
+        return [{"name": row[0], "payload": json.loads(row[1])} for row in rows]
+
+    def upsert_template(self, name: str, payload: dict[str, object]) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO quote_templates(name, payload_json) VALUES (?, ?) "
+                "ON CONFLICT(name) DO UPDATE SET payload_json = excluded.payload_json",
+                (name, json.dumps(payload)),
+            )
+
+    def delete_template(self, name: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM quote_templates WHERE name = ?",
+                (name,),
+            )
 
     def get_setting(self, key: str, default: str = "") -> str:
         with self._connect() as connection:
