@@ -10,6 +10,45 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from devis_batiment.models import MaterialLine, QuoteEstimate, QuoteInput
+from devis_batiment.services.billing import compute_totals
+
+
+def _fmt(amount: float, currency: str) -> str:
+    return f"{amount:,.0f} {currency}".replace(",", " ")
+
+
+def build_billing_lines(
+    company_info: dict[str, str],
+    base_amount: float,
+) -> list[tuple[str, str]]:
+    """Construit les lignes du bloc totaux (HT/TVA/TTC ou Total, + acompte).
+
+    Le montant estimé est traité comme HT. Renvoie une liste (libellé, valeur).
+    """
+    currency = company_info.get("currency", "Ar")
+    totals = compute_totals(
+        base_amount,
+        vat_enabled=company_info.get("vat_enabled", "false") == "true",
+        vat_rate_pct=float(company_info.get("vat_rate_pct", "20") or 0),
+        deposit_pct=float(company_info.get("deposit_pct", "0") or 0),
+    )
+    lines: list[tuple[str, str]] = []
+    if totals.vat_enabled:
+        lines.append(("Total HT", _fmt(totals.total_ht, currency)))
+        lines.append(
+            (f"TVA ({totals.vat_rate_pct:g} %)", _fmt(totals.vat_amount, currency))
+        )
+        lines.append(("Total TTC", _fmt(totals.total_ttc, currency)))
+    else:
+        lines.append(("Total", _fmt(totals.total_ht, currency)))
+    if totals.deposit_amount > 0:
+        lines.append(
+            (
+                f"Acompte à la commande ({totals.deposit_pct:g} %)",
+                _fmt(totals.deposit_amount, currency),
+            )
+        )
+    return lines
 
 
 def export_quote_pdf(
@@ -113,10 +152,8 @@ def export_quote_pdf(
     elements.append(materials_table)
     elements.append(Spacer(1, 12))
 
-    # Total
-    totals = [
-        ["Total HT", f"{estimate.total_amount:,.0f} {company_info.get('currency', 'Ar')}".replace(",", " ")],
-    ]
+    # Totaux (HT / TVA / TTC ou Total, + acompte éventuel)
+    totals = [list(row) for row in build_billing_lines(company_info, estimate.total_amount)]
     totals_table = Table(totals, hAlign="RIGHT", colWidths=[80 * mm, 60 * mm])
     totals_table.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
@@ -124,7 +161,25 @@ def export_quote_pdf(
         ("FONTSIZE", (0, 0), (-1, -1), 11),
     ]))
     elements.append(totals_table)
-    elements.append(Spacer(1, 24))
+    if company_info.get("vat_enabled", "false") != "true":
+        elements.append(Spacer(1, 2))
+        elements.append(Paragraph("TVA non applicable.", small_style))
+    elements.append(Spacer(1, 16))
+
+    # Mentions : validité, conditions de règlement, conditions générales
+    payment_terms = company_info.get("payment_terms", "").strip()
+    if payment_terms:
+        elements.append(Paragraph("<b>Conditions de règlement :</b>", normal_style))
+        elements.append(Paragraph(payment_terms.replace("\n", "<br/>"), normal_style))
+        elements.append(Spacer(1, 8))
+
+    terms_conditions = company_info.get("terms_conditions", "").strip()
+    if terms_conditions:
+        elements.append(Paragraph("<b>Conditions générales :</b>", small_style))
+        elements.append(Paragraph(terms_conditions.replace("\n", "<br/>"), small_style))
+        elements.append(Spacer(1, 8))
+
+    elements.append(Spacer(1, 8))
 
     # Signature
     elements.append(Paragraph("Cachet et signature du client :", normal_style))

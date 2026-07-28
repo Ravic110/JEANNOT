@@ -44,6 +44,9 @@ class QuoteService:
         quote_input, estimate = self.load_quote(quote_id)
         return self.database.insert_quote(quote_input, estimate)
 
+    def update_status(self, quote_id: int, status: str) -> None:
+        self.database.update_quote_status(quote_id, status)
+
 
 class AdminService:
     def __init__(self, database: Database) -> None:
@@ -196,6 +199,11 @@ SETTING_KEYS = [
     "currency",
     "quote_validity_days",
     "safety_margin_pct",
+    "vat_enabled",
+    "vat_rate_pct",
+    "deposit_pct",
+    "payment_terms",
+    "terms_conditions",
 ]
 
 SETTING_DEFAULTS: dict[str, str] = {
@@ -207,6 +215,11 @@ SETTING_DEFAULTS: dict[str, str] = {
     "currency": "Ar",
     "quote_validity_days": "30",
     "safety_margin_pct": "0",
+    "vat_enabled": "false",
+    "vat_rate_pct": "20",
+    "deposit_pct": "0",
+    "payment_terms": "",
+    "terms_conditions": "",
 }
 
 

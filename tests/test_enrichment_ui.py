@@ -217,3 +217,51 @@ def test_quote_form_apply_template_survives_type_prefill(qtbot):
     assert form.surface_m2.value() == 42.0
     assert form.structure_type.currentText() == "Béton armé"
     assert form.notes.toPlainText() == "Modèle mur"
+
+
+# --- Facturation MG : paramètres TVA / acompte / conditions ---
+
+
+def test_settings_view_saves_billing_fields(qtbot):
+    _app()
+    from devis_batiment.services import SettingsService
+    from devis_batiment.ui.settings_view import SettingsView
+
+    database = Database(Path(":memory:"))
+    database.initialize()
+    service = SettingsService(database)
+
+    view = SettingsView(service)
+    qtbot.addWidget(view)
+    view.load()
+    view.vat_enabled.setChecked(True)
+    view.vat_rate_pct.setValue(20.0)
+    view.deposit_pct.setValue(30.0)
+    view.payment_terms.setPlainText("Acompte à la commande.")
+    view.terms_conditions.setPlainText("Sous réserve de disponibilité.")
+    view._on_save()
+
+    values = service.get_all()
+    assert values["vat_enabled"] == "true"
+    assert values["vat_rate_pct"] == "20.0"
+    assert values["deposit_pct"] == "30.0"
+    assert values["payment_terms"] == "Acompte à la commande."
+    assert values["terms_conditions"] == "Sous réserve de disponibilité."
+
+
+def test_settings_view_loads_billing_fields(qtbot):
+    _app()
+    from devis_batiment.services import SettingsService
+    from devis_batiment.ui.settings_view import SettingsView
+
+    database = Database(Path(":memory:"))
+    database.initialize()
+    service = SettingsService(database)
+    service.save_all({"vat_enabled": "true", "deposit_pct": "25"})
+
+    view = SettingsView(service)
+    qtbot.addWidget(view)
+    view.load()
+
+    assert view.vat_enabled.isChecked() is True
+    assert view.deposit_pct.value() == 25.0
