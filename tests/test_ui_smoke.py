@@ -25,7 +25,7 @@ def test_admin_and_history_views_expose_main_tables(qtbot):
     qtbot.addWidget(history_view)
 
     assert admin_view.adjustment_table.columnCount() == 3
-    assert history_view.quote_table.columnCount() == 4
+    assert history_view.quote_table.columnCount() == 5
 
 
 def test_create_main_window_bootstraps_database_and_services(tmp_path: Path, qtbot):

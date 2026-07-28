@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -92,6 +94,49 @@ class SettingsView(QWidget):
         calc_form.addRow("Devise affichée", self.currency)
         calc_form.addRow("Validité du devis", self.quote_validity_days)
 
+        # --- Groupe : Facturation & mentions ---
+        billing_group = QGroupBox("Facturation & mentions")
+        billing_form = QFormLayout(billing_group)
+
+        self.vat_enabled = QCheckBox("Appliquer la TVA sur le devis")
+        self.vat_enabled.setToolTip(
+            "Décochez si vous n'êtes pas assujetti : le devis affichera "
+            "« TVA non applicable »."
+        )
+
+        self.vat_rate_pct = QDoubleSpinBox()
+        self.vat_rate_pct.setMinimum(0.0)
+        self.vat_rate_pct.setMaximum(100.0)
+        self.vat_rate_pct.setDecimals(1)
+        self.vat_rate_pct.setSingleStep(0.5)
+        self.vat_rate_pct.setSuffix(" %")
+
+        self.deposit_pct = QDoubleSpinBox()
+        self.deposit_pct.setMinimum(0.0)
+        self.deposit_pct.setMaximum(100.0)
+        self.deposit_pct.setDecimals(1)
+        self.deposit_pct.setSingleStep(5.0)
+        self.deposit_pct.setSuffix(" %")
+        self.deposit_pct.setToolTip("Acompte demandé à la commande (0 = aucun).")
+
+        self.payment_terms = QTextEdit()
+        self.payment_terms.setPlaceholderText(
+            "Ex : Acompte de 30 % à la commande, solde à la livraison."
+        )
+        self.payment_terms.setMaximumHeight(70)
+
+        self.terms_conditions = QTextEdit()
+        self.terms_conditions.setPlaceholderText(
+            "Conditions générales / clause de réserve affichées en bas du devis."
+        )
+        self.terms_conditions.setMaximumHeight(70)
+
+        billing_form.addRow("TVA", self.vat_enabled)
+        billing_form.addRow("Taux de TVA", self.vat_rate_pct)
+        billing_form.addRow("Acompte à la commande", self.deposit_pct)
+        billing_form.addRow("Conditions de règlement", self.payment_terms)
+        billing_form.addRow("Conditions générales", self.terms_conditions)
+
         # --- Boutons ---
         btn_layout = QHBoxLayout()
         self._status_label = QLabel()
@@ -105,6 +150,7 @@ class SettingsView(QWidget):
 
         main_layout.addWidget(company_group)
         main_layout.addWidget(calc_group)
+        main_layout.addWidget(billing_group)
         main_layout.addLayout(btn_layout)
         main_layout.addStretch()
 
@@ -135,6 +181,17 @@ class SettingsView(QWidget):
             self.quote_validity_days.setValue(int(values.get("quote_validity_days", "30")))
         except ValueError:
             self.quote_validity_days.setValue(30)
+        self.vat_enabled.setChecked(values.get("vat_enabled", "false") == "true")
+        try:
+            self.vat_rate_pct.setValue(float(values.get("vat_rate_pct", "20")))
+        except ValueError:
+            self.vat_rate_pct.setValue(20.0)
+        try:
+            self.deposit_pct.setValue(float(values.get("deposit_pct", "0")))
+        except ValueError:
+            self.deposit_pct.setValue(0.0)
+        self.payment_terms.setPlainText(values.get("payment_terms", ""))
+        self.terms_conditions.setPlainText(values.get("terms_conditions", ""))
         self._status_label.setText("")
 
     def _on_browse_logo(self) -> None:
@@ -157,6 +214,11 @@ class SettingsView(QWidget):
                 "currency": self.currency.text().strip() or "Ar",
                 "safety_margin_pct": str(self.safety_margin_pct.value()),
                 "quote_validity_days": str(self.quote_validity_days.value()),
+                "vat_enabled": "true" if self.vat_enabled.isChecked() else "false",
+                "vat_rate_pct": str(self.vat_rate_pct.value()),
+                "deposit_pct": str(self.deposit_pct.value()),
+                "payment_terms": self.payment_terms.toPlainText().strip(),
+                "terms_conditions": self.terms_conditions.toPlainText().strip(),
             })
             self._status_label.setText("Paramètres enregistrés.")
         except Exception as exc:

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -31,9 +32,12 @@ from devis_batiment.models import QuoteInput
 
 class QuoteFormWidget(QWidget):
     quote_requested = Signal(object)
+    save_template_requested = Signal(str, object)
 
     def __init__(self) -> None:
         super().__init__()
+        self._applying_template = False
+        self._templates: dict[str, dict] = {}
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -44,15 +48,33 @@ class QuoteFormWidget(QWidget):
         main_layout.setSpacing(14)
         main_layout.setContentsMargins(16, 16, 16, 16)
 
+        # --- Ligne : modèles de devis ---
+        template_group = QGroupBox("Modèle de devis")
+        template_row = QHBoxLayout(template_group)
+        self._no_template_label = "— Aucun modèle —"
+        self.template_selector = QComboBox()
+        self.template_selector.addItem(self._no_template_label)
+        self.apply_template_button = QPushButton("Appliquer")
+        self.save_template_button = QPushButton("Enregistrer comme modèle")
+        template_row.addWidget(self.template_selector, stretch=1)
+        template_row.addWidget(self.apply_template_button)
+        template_row.addWidget(self.save_template_button)
+
         # --- Groupe : Informations client ---
         client_group = QGroupBox("Informations client")
         client_form = QFormLayout(client_group)
+        self._new_client_label = "— Nouveau client —"
+        self._client_contacts: dict[str, str] = {}
+        self.client_selector = QComboBox()
+        self.client_selector.addItem(self._new_client_label)
         self.client_name = QLineEdit()
         self.client_name.setPlaceholderText("Nom complet du client *")
         self.client_contact = QLineEdit()
         self.client_contact.setPlaceholderText("Téléphone ou e-mail")
+        client_form.addRow("Client existant", self.client_selector)
         client_form.addRow("Nom du client *", self.client_name)
         client_form.addRow("Contact", self.client_contact)
+        self.client_selector.currentIndexChanged.connect(self._on_client_selected)
 
         # --- Groupe : Caractéristiques du projet ---
         project_group = QGroupBox("Caractéristiques du projet")
@@ -170,6 +192,7 @@ class QuoteFormWidget(QWidget):
         btn_layout.addWidget(self.reset_button)
         btn_layout.addWidget(self.calculate_button)
 
+        main_layout.addWidget(template_group)
         main_layout.addWidget(client_group)
         main_layout.addWidget(project_group)
         main_layout.addWidget(tech_group)
@@ -183,6 +206,30 @@ class QuoteFormWidget(QWidget):
         self.calculate_button.clicked.connect(self._on_calculate)
         self.reset_button.clicked.connect(self._on_reset)
         self.project_type.currentIndexChanged.connect(self._on_project_type_changed)
+        self.apply_template_button.clicked.connect(self._on_apply_template_clicked)
+        self.save_template_button.clicked.connect(self._on_save_template_clicked)
+
+    def set_clients(self, clients: list[dict[str, object]]) -> None:
+        """Alimente le sélecteur de clients existants."""
+        current = self.client_selector.currentText()
+        self.client_selector.blockSignals(True)
+        self.client_selector.clear()
+        self.client_selector.addItem(self._new_client_label)
+        self._client_contacts = {}
+        for client in clients:
+            name = str(client["name"])
+            self._client_contacts[name] = str(client.get("contact") or client.get("phone") or "")
+            self.client_selector.addItem(name)
+        index = self.client_selector.findText(current)
+        self.client_selector.setCurrentIndex(index if index >= 0 else 0)
+        self.client_selector.blockSignals(False)
+
+    def _on_client_selected(self) -> None:
+        name = self.client_selector.currentText()
+        if name == self._new_client_label:
+            return
+        self.client_name.setText(name)
+        self.client_contact.setText(self._client_contacts.get(name, ""))
 
     def _on_calculate(self) -> None:
         errors = self._validate()
@@ -201,7 +248,55 @@ class QuoteFormWidget(QWidget):
             errors.append("Le nom du client est obligatoire.")
         return errors
 
+    def set_templates(self, templates: list[dict[str, object]]) -> None:
+        current = self.template_selector.currentText()
+        self.template_selector.blockSignals(True)
+        self.template_selector.clear()
+        self.template_selector.addItem(self._no_template_label)
+        self._templates = {}
+        for template in templates:
+            name = str(template["name"])
+            self._templates[name] = dict(template.get("payload") or {})
+            self.template_selector.addItem(name)
+        index = self.template_selector.findText(current)
+        self.template_selector.setCurrentIndex(index if index >= 0 else 0)
+        self.template_selector.blockSignals(False)
+
+    def apply_template(self, payload: dict[str, object]) -> None:
+        """Remplit les champs projet/technique depuis un modèle, sans laisser le
+        pré-remplissage automatique du type écraser les valeurs du modèle."""
+        self._applying_template = True
+        try:
+            _set_combo(self.project_type, str(payload.get("project_type", "")))
+            self.surface_m2.setValue(float(payload.get("surface_m2", 0.0)))
+            self.length_m.setValue(float(payload.get("length_m", 0.0)))
+            self.width_m.setValue(float(payload.get("width_m", 0.0)))
+            self.height_m.setValue(float(payload.get("height_m", 0.0)))
+            self.thickness_m.setValue(float(payload.get("thickness_m", 0.0)))
+            self.floors.setValue(int(payload.get("floors", 1)))
+            self.room_count.setValue(int(payload.get("room_count", 0)))
+            _set_combo(self.structure_type, str(payload.get("structure_type", "")))
+            _set_combo(self.roof_type, str(payload.get("roof_type", "")))
+            _set_combo(self.finish_level, str(payload.get("finish_level", "")))
+            _set_combo(self.complexity, str(payload.get("complexity", "")))
+            self.notes.setPlainText(str(payload.get("notes", "")))
+        finally:
+            self._applying_template = False
+
+    def _on_apply_template_clicked(self) -> None:
+        name = self.template_selector.currentText()
+        payload = self._templates.get(name)
+        if payload:
+            self.apply_template(payload)
+
+    def _on_save_template_clicked(self) -> None:
+        name, ok = QInputDialog.getText(self, "Enregistrer le modèle", "Nom du modèle :")
+        if ok and name.strip():
+            self.save_template_requested.emit(name.strip(), self._build_input())
+
     def _on_project_type_changed(self) -> None:
+        if self._applying_template:
+            return
         ptype = self.project_type.currentText()
         if ptype == "Mur":
             self.length_m.setValue(10.0)

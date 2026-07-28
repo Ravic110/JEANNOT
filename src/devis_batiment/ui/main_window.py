@@ -24,6 +24,7 @@ from devis_batiment.services import (
     QuoteService,
     QuoteWorkflow,
     SettingsService,
+    TemplateService,
 )
 from devis_batiment.storage import Database
 from devis_batiment.ui.admin_view import AdminView
@@ -49,6 +50,7 @@ class MainWindow(QMainWindow):
         self.settings_service = SettingsService(self.database)
         self.client_service = ClientService(self.database)
         self.project_service = ProjectService(self.database)
+        self.template_service = TemplateService(self.database)
 
         self.admin_service.seed_defaults_if_empty()
 
@@ -59,8 +61,11 @@ class MainWindow(QMainWindow):
         self._build_ui()
 
         self.quote_form.quote_requested.connect(self._on_quote_requested)
+        self.quote_form.save_template_requested.connect(self._on_save_template_requested)
         self.history_view.open_quote_requested.connect(self._on_open_quote_requested)
         self.pages.currentChanged.connect(self._on_page_changed)
+
+        self.quote_form.set_templates(self.template_service.list_templates())
 
     def _build_ui(self) -> None:
         sidebar = QListWidget()
@@ -136,6 +141,14 @@ class MainWindow(QMainWindow):
         self.pages.setCurrentIndex(3)
         self.history_view.refresh()
 
+    def _on_save_template_requested(self, name: str, quote_input: QuoteInput) -> None:
+        try:
+            self.template_service.save_template(name, quote_input)
+            self.quote_form.set_templates(self.template_service.list_templates())
+            QMessageBox.information(self, "Modèle enregistré", f"Le modèle « {name} » a été enregistré.")
+        except Exception as exc:
+            QMessageBox.critical(self, "Erreur", f"Impossible d'enregistrer le modèle :\n{exc}")
+
     def _on_open_quote_requested(self, quote_id: int) -> None:
         try:
             quote_input, estimate = self.quote_service.load_quote(quote_id)
@@ -153,11 +166,13 @@ class MainWindow(QMainWindow):
             self.dashboard_view.set_currency(currency)
             self.dashboard_view.refresh()
         elif index == 1:
+            self.clients_view.set_currency(currency)
             self.clients_view.refresh()
         elif index == 2:
             self.projects_view.refresh()
         elif index == 3:
             self.history_view.set_currency(currency)
+            self.quote_form.set_clients(self.client_service.list_clients())
         elif index == 4:
             self.materials_view.refresh()
         elif index == 5:

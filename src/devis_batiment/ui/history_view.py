@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -13,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from devis_batiment.config import QUOTE_STATUSES
 from devis_batiment.services import QuoteService
 from devis_batiment.ui.formatting import format_amount
 
@@ -43,21 +46,29 @@ class HistoryView(QWidget):
         filters.addWidget(self.refresh_button)
         filters.addWidget(self.duplicate_button)
 
-        self.quote_table = QTableWidget(0, 4)
-        self.quote_table.setHorizontalHeaderLabels(["ID", "Date", "Client", f"Montant ({self._currency})"])
+        self.quote_table = QTableWidget(0, 5)
+        self.quote_table.setHorizontalHeaderLabels(
+            ["ID", "Date", "Client", f"Montant ({self._currency})", "Statut"]
+        )
         self.quote_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.quote_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.quote_table.horizontalHeader().setStretchLastSection(True)
         self.quote_table.setAlternatingRowColors(True)
+        self.quote_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+
+        hint = QLabel("Astuce : clic droit sur un devis pour changer son statut.")
+        hint.setStyleSheet("color: #94A3B8; font-size: 11px;")
 
         layout.addLayout(filters)
         layout.addWidget(self.quote_table)
+        layout.addWidget(hint)
 
         self.search_input.textChanged.connect(self._on_search)
         self.refresh_button.clicked.connect(self.refresh)
         self.duplicate_button.clicked.connect(self._on_duplicate)
         self.quote_table.itemSelectionChanged.connect(self._on_selection_changed)
         self.quote_table.cellDoubleClicked.connect(self._on_row_double_clicked)
+        self.quote_table.customContextMenuRequested.connect(self._on_context_menu)
 
     def set_service(self, quote_service: QuoteService) -> None:
         self.quote_service = quote_service
@@ -66,7 +77,7 @@ class HistoryView(QWidget):
     def set_currency(self, currency: str) -> None:
         self._currency = currency or "Ar"
         self.quote_table.setHorizontalHeaderLabels(
-            ["ID", "Date", "Client", f"Montant ({self._currency})"]
+            ["ID", "Date", "Client", f"Montant ({self._currency})", "Statut"]
         )
         self.refresh()
 
@@ -105,6 +116,10 @@ class HistoryView(QWidget):
             amt_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.quote_table.setItem(i, 3, amt_item)
 
+            status_item = QTableWidgetItem(str(row.get("status", "Brouillon")))
+            status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.quote_table.setItem(i, 4, status_item)
+
         self.quote_table.resizeColumnsToContents()
 
     def _on_selection_changed(self) -> None:
@@ -116,6 +131,34 @@ class HistoryView(QWidget):
             return
         quote_id = int(id_item.data(Qt.ItemDataRole.UserRole))
         self.open_quote_requested.emit(quote_id)
+
+    def _on_context_menu(self, position) -> None:
+        item = self.quote_table.itemAt(position)
+        if item is None:
+            return
+        id_item = self.quote_table.item(item.row(), 0)
+        if id_item is None:
+            return
+        quote_id = int(id_item.data(Qt.ItemDataRole.UserRole))
+
+        menu = QMenu(self)
+        status_menu = menu.addMenu("Marquer comme")
+        for status in QUOTE_STATUSES:
+            action = QAction(status, self)
+            action.triggered.connect(
+                lambda _checked=False, s=status: self.apply_status(quote_id, s)
+            )
+            status_menu.addAction(action)
+        menu.exec(self.quote_table.viewport().mapToGlobal(position))
+
+    def apply_status(self, quote_id: int, status: str) -> None:
+        if self.quote_service is None:
+            return
+        try:
+            self.quote_service.update_status(quote_id, status)
+            self.refresh()
+        except Exception as exc:
+            QMessageBox.critical(self, "Erreur", f"Impossible de changer le statut :\n{exc}")
 
     def _on_duplicate(self) -> None:
         if self.quote_service is None:
