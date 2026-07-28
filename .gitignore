@@ -30,6 +30,10 @@ build/
 *.sqlite
 *.sqlite3
 
+# Documentation locale
+/docs/
+*.docx
+
 # OS
 .DS_Store
 Thumbs.db
